@@ -14,3 +14,9 @@ data = raw_edf.get_data()
 print(data)
 
 raw_edf.plot(block=True, scalings=dict(eeg=10e-5), duration=40)
+
+# Normalization
+
+# Filtering
+
+# Segmentation: epochs
