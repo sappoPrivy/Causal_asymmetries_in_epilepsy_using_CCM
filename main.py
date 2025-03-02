@@ -1,22 +1,75 @@
 import os
 import mne
-import numpy
-import matplotlib
+import numpy as np
+import matplotlib.pyplot as plt
 
+# Temporary test file
 file = 'chb01_03.edf'
+
+# Loading the datafile
 raw_edf = mne.io.read_raw_edf(file, preload = True)
 
-print(raw_edf.info)
+# Querying the raw object through info object
+print("----- DATA INFO ----\n"+ str(raw_edf.info))
 
-events = mne.find_events(raw_edf, stim_channel="F7-T7", output='onset')
-
+# Extracting data
 data = raw_edf.get_data()
-print(data)
+print("----- DATA AS ARRAY ----\n" + str(data))
 
-raw_edf.plot(block=True, scalings=dict(eeg=10e-5), duration=40)
+# Saving data
+print("----- SAVING DATA ----\n")
+np.save(file="my_data.npy", arr=data)
+
+# Extract annotations
+print("----- EXTRACT ANNOTATIONS ----\n")
+seizure_onsets = [] 
+seizure_offsets = []
+seizure_descriptions = []
+findFile = False
+
+with open("chb01-summary.txt", "r") as f:
+    for l in f:
+        if l.strip() == "File Name: chb01_03.edf": 
+            findFile = True
+            continue
+        if findFile:
+            if l.strip() == '': break;    
+            if l.startswith("Seizure Start Time:"):
+                seizure_onsets.append(float(l.split(":")[1].strip().split(" ")[0]))
+            if l.startswith("Seizure End Time:"):
+                seizure_offsets.append(float(l.split(":")[1].strip().split(" ")[0]))
+    
+seizure_durations = [offset-onset for onset, offset in zip(seizure_onsets, seizure_offsets)]
+seizure_descriptions = [("seizure_"+ str((i+1))) for i in range(len(seizure_onsets))]
+
+# Creating annotation object
+annots = mne.Annotations(onset=seizure_onsets, duration=seizure_durations, description=seizure_descriptions)
+
+# Saving annotation object for data
+raw_edf.set_annotations(annots)
+print(annots)
+print(f"Seizure event: {annots.onset[0], annots.duration[0]}")
+annots.save("annotations.csv", overwrite=True)
+
+# Extract events from annotations
+print("----- EXTRACT EVENTS ----\n")
+events, event_id = mne.events_from_annotations(raw_edf)
+print(events)
+
+# Band-pass Filtering
+print("----- FILTERING ----\n")
+raw_edf.filter(l_freq=0.5, h_freq=40)
+# Maybe display filter vs unfiltered
+
+# Segmenting into epochs
+print("----- SEGMENTING ----\n")
+# epochs = mne.Epochs(raw_edf, events, tmin=0, tmax=2.0, preload=True, baseline=(0,0))
+epochs = mne.make_fixed_length_epochs(raw_edf, duration=2.0, preload=True)
+index = int(annots.onset[0] // 2)
+epochs[index:].plot(n_epochs=10, scalings=dict(eeg=10e-5), events=True)
 
 # Normalization
 
-# Filtering
-
-# Segmentation: epochs
+# Plot the data
+print("----- PLOTTING DATA ----\n")
+raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
