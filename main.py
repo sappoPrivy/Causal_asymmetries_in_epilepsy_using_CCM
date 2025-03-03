@@ -2,6 +2,7 @@ import os
 import mne
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 
 # Temporary test file
 file = 'chb01_03.edf'
@@ -58,18 +59,35 @@ print(events)
 
 # Band-pass Filtering
 print("----- FILTERING ----\n")
+unfiltered_edf = raw_edf.copy()
 raw_edf.filter(l_freq=0.5, h_freq=40)
-# Maybe display filter vs unfiltered
 
 # Segmenting into epochs
 print("----- SEGMENTING ----\n")
 # epochs = mne.Epochs(raw_edf, events, tmin=0, tmax=2.0, preload=True, baseline=(0,0))
 epochs = mne.make_fixed_length_epochs(raw_edf, duration=2.0, preload=True)
 index = int(annots.onset[0] // 2)
-epochs[index:].plot(n_epochs=10, scalings=dict(eeg=10e-5), events=True)
+epochs[index:].plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
 
 # Normalization
+print("----- NORMALIZATION ----\n")
+
+#  THE CONVERTION IS NOT WORKING
+# epochs_copy = epochs.get_data(copy=True)
+# n_epochs, n_channels, n_times = epochs_copy.shape
+# data = epochs_copy.reshape(n_epochs * n_channels, n_times)
+
+# scaler = MinMaxScaler()
+# normalized = scaler.fit_transform(data)
+# print(normalized)
+
+# #  THE CONVERTION IS NOT WORKING
+# normalized.reshape(n_epochs, n_channels, n_times)
+# normalized_data = epochs.copy()
+# normalized_data._data=normalized
+# normalized_data.plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
+unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
 raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
