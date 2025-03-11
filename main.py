@@ -75,17 +75,17 @@ print("----- NORMALIZATION ----\n")
 
 # Z-score normalization
 #def normalization(data):
-#    datapoints = data.size
-#    mean = sum(data)/datapoints
-#    variance = 0
-#    for n in data:
-#        variance += (n-mean)*(n-mean)
-#    variance /= datapoints
-#    std = np.sqrt(variance)
-#    for x in range(datapoints):
-#        data[x] = (data[x]-mean)/std
-#    print('done')
-#    return data
+    datapoints = data.size
+    mean = sum(data)/datapoints
+    variance = 0
+    for n in data:
+        variance += (n-mean)*(n-mean)
+    variance /= datapoints
+    std = np.sqrt(variance)
+    for x in range(datapoints):
+        data[x] = (data[x]-mean)/std
+    print('done')
+    return data
 
 
 
