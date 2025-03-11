@@ -71,21 +71,39 @@ epochs[index:].plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
 
 # Normalization
 print("----- NORMALIZATION ----\n")
+def normalization(data):
+    datapoints = data.size
+    mean = sum(data)/datapoints
+    variance = 0
+    for n in data:
+        variance += (n-mean)*(n-mean)
+    variance /= datapoints
+    std = np.sqrt(variance)
+    for x in range(datapoints):
+        data[x] = (data[x]-mean)/std
+    print('done')
+    return data
 
-#  THE CONVERTION IS NOT WORKING
-# epochs_copy = epochs.get_data(copy=True)
-# n_epochs, n_channels, n_times = epochs_copy.shape
-# data = epochs_copy.reshape(n_epochs * n_channels, n_times)
+normalized_edf = normalized_edf.apply_function(normalization, 'all')
 
-# scaler = MinMaxScaler()
-# normalized = scaler.fit_transform(data)
-# print(normalized)
+# Computing basic features
+print("----- Feature Extraction ----\n")
+def compute_features(data):
+    features = []
+    mean=0
+    variance=0
+    for epoch in data:
+        channel_features=[]
+        for channel in epoch:
+            mean = sum(channel) / len(channel)
+            for x in channel:
+                variance += (x-mean) ** 2
+            variance /= len(channel)
+            channel_features.append([mean, variance])
+        features.append(channel_features)
+    return np.array(features)
 
-# #  THE CONVERTION IS NOT WORKING
-# normalized.reshape(n_epochs, n_channels, n_times)
-# normalized_data = epochs.copy()
-# normalized_data._data=normalized
-# normalized_data.plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
+feature_matrix = compute_features(epochs)
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
