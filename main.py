@@ -2,10 +2,10 @@ import os
 import mne
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
+import pandas as pd
 
 # Temporary test file
-file = 'chb01_03.edf'
+file = 'chb01_16.edf'
 
 # Loading the datafile
 raw_edf = mne.io.read_raw_edf(file, preload = True)
@@ -15,6 +15,7 @@ print("----- DATA INFO ----\n"+ str(raw_edf.info))
 
 # Extracting data
 data = raw_edf.get_data()
+print(f"Shape of data: (num_channels, num_samples) = {data.shape}")
 print("----- DATA AS ARRAY ----\n" + str(data))
 
 # Saving data
@@ -30,7 +31,7 @@ findFile = False
 
 with open("chb01-summary.txt", "r") as f:
     for l in f:
-        if l.strip() == "File Name: chb01_03.edf": 
+        if l.strip() == "File Name: chb01_16.edf": 
             findFile = True
             continue
         if findFile:
@@ -84,7 +85,8 @@ def normalization(data):
     print('done')
     return data
 
-normalized_edf = normalized_edf.apply_function(normalization, 'all')
+normalized_epochs = epochs.copy()
+normalized_epochs.apply_function(normalization, 'all')
 
 # Computing basic features
 print("----- FEATURE EXTRACTION ----\n")
@@ -128,7 +130,9 @@ print(f"VARIANCE:\n{variance_matrix.head()}")
 print(f"STANDARD DEVIATION:\n{std_matrix.head()}")
 print(f"RMS:\n{rms_matrix.head()}")
 
+
 # Plot the data
 print("----- PLOTTING DATA ----\n")
+normalized_epochs[index:].plot(block=True, n_epochs=5, scalings=dict(eeg=1), events=True)
 unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
 raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
