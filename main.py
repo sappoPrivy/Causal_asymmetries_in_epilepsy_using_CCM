@@ -91,8 +91,32 @@ print("----- NORMALIZATION ----\n")
 
 normalized_edf = normalized_edf.apply_function(normalization, 'all')
 
+# Computing basic features
+print("----- Feature Extraction ----\n")
+def compute_features(data):
+    features = []
+    mean=0
+    variance=0
+    for epoch in data:
+        channel_features=[]
+        for channel in epoch:
+            mean = sum(channel) / len(channel)
+            for x in channel:
+                variance += (x-mean) ** 2
+            variance /= len(channel)
+            channel_features.append([mean, variance])
+        features.append(channel_features)
+    return np.array(features)
+
+feature_matrix = compute_features(epochs)
+
+
+normalized_epochs = epochs.copy()
+normalized_epochs.apply_function(normalization, 'all')
+
 # Plot the data
 print("----- PLOTTING DATA ----\n")
-normalized_edf.plot(block=True, scalings=dict(eeg=10), start=annots.onset[0], duration=annots.duration[0])
-unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
-raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
+normalized_epochs[index:].plot(block=True, n_epochs=5, scalings=dict(eeg=1), events=True)
+#normalized_edf.plot(block=True, scalings=dict(eeg=10), start=annots.onset[0], duration=annots.duration[0])
+#unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
+#raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
