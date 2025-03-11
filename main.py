@@ -87,23 +87,46 @@ def normalization(data):
 normalized_edf = normalized_edf.apply_function(normalization, 'all')
 
 # Computing basic features
-print("----- Feature Extraction ----\n")
+print("----- FEATURE EXTRACTION ----\n")
 def compute_features(data):
     features = []
     mean=0
     variance=0
+    rms=0
     for epoch in data:
         channel_features=[]
         for channel in epoch:
             mean = sum(channel) / len(channel)
             for x in channel:
                 variance += (x-mean) ** 2
+                rms += x**2
             variance /= len(channel)
-            channel_features.append([mean, variance])
+            std = np.sqrt(variance)
+            rms = np.sqrt(rms/len(channel))
+            channel_features.append([mean, variance, std, rms])
         features.append(channel_features)
     return np.array(features)
 
 feature_matrix = compute_features(epochs)
+
+# Display features
+num_epochs, num_channels, num_features = feature_matrix.shape
+m_mx = feature_matrix[:,:, 0]
+v_mx = feature_matrix[:,:, 1]
+std_mx = feature_matrix[:,:, 2]
+rms_mx = feature_matrix[:,:, 3]
+
+col = [f"Ch_{i+1}" for i in range(num_channels)]
+feature_matrix_reshape = feature_matrix.reshape(num_epochs, -1)
+mean_matrix = pd.DataFrame(m_mx, columns = col)
+variance_matrix = pd.DataFrame(v_mx, columns = col)
+std_matrix = pd.DataFrame(std_mx, columns = col)
+rms_matrix = pd.DataFrame(rms_mx, columns = col)
+
+print(f"MEAN:\n{mean_matrix.head()}")
+print(f"VARIANCE:\n{variance_matrix.head()}")
+print(f"STANDARD DEVIATION:\n{std_matrix.head()}")
+print(f"RMS:\n{rms_matrix.head()}")
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
