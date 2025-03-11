@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # Temporary test file
-file = 'chb01_03.edf'
+file = 'chb01_16.edf'
 
 # Loading the datafile
 raw_edf = mne.io.read_raw_edf(file, preload = True)
@@ -30,7 +30,7 @@ findFile = False
 
 with open("chb01-summary.txt", "r") as f:
     for l in f:
-        if l.strip() == "File Name: chb01_03.edf": 
+        if l.strip() == "File Name: chb01_16.edf": 
             findFile = True
             continue
         if findFile:
@@ -66,15 +66,15 @@ raw_edf.filter(l_freq=0.5, h_freq=40)
 # Segmenting into epochs
 print("----- SEGMENTING ----\n")
 # epochs = mne.Epochs(raw_edf, events, tmin=0, tmax=2.0, preload=True, baseline=(0,0))
-epochs = mne.make_fixed_length_epochs(raw_edf, duration=2.0, preload=True)
+epochs = mne.make_fixed_length_epochs(unfiltered_edf, duration=2.0, preload=True)
 index = int(annots.onset[0] // 2)
-epochs[index:].plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
+epochs[index-1:].plot(n_epochs=5, scalings=dict(eeg=50e-5), events=True)
 
 # Normalization
 print("----- NORMALIZATION ----\n")
 
 # Z-score normalization
-#def normalization(data):
+def normalization(data):
     datapoints = data.size
     mean = sum(data)/datapoints
     variance = 0
@@ -86,8 +86,6 @@ print("----- NORMALIZATION ----\n")
         data[x] = (data[x]-mean)/std
     print('done')
     return data
-
-
 
 normalized_edf = normalized_edf.apply_function(normalization, 'all')
 
@@ -116,7 +114,7 @@ normalized_epochs.apply_function(normalization, 'all')
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
-normalized_epochs[index:].plot(block=True, n_epochs=5, scalings=dict(eeg=1), events=True)
-#normalized_edf.plot(block=True, scalings=dict(eeg=10), start=annots.onset[0], duration=annots.duration[0])
-#unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
+normalized_epochs[index-1:].plot( n_epochs=5, scalings=dict(eeg=5), events=True)
+normalized_edf.plot(scalings=dict(eeg=5), start=annots.onset[0], duration=annots.duration[0])
+unfiltered_edf.plot(block=True, scalings=dict(eeg=50e-5), start=annots.onset[0], duration=annots.duration[0])
 #raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
