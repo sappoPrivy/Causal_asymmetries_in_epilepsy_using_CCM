@@ -3,6 +3,7 @@ import mne
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from fooof import FOOOF
 
 # Temporary test file
 file = 'chb01_16.edf'
@@ -66,6 +67,7 @@ raw_edf.filter(l_freq=0.5, h_freq=40)
 # Segmenting into epochs
 print("----- SEGMENTING ----\n")
 # epochs = mne.Epochs(raw_edf, events, tmin=0, tmax=2.0, preload=True, baseline=(0,0))
+# epochs = mne.Epochs(raw_edf, events, event_id, tmin=0, tmax=2, baseline=None, preload=True)
 epochs = mne.make_fixed_length_epochs(raw_edf, duration=2.0, preload=True)
 index = int(annots.onset[0] // 2)
 epochs[index:].plot(n_epochs=5, scalings=dict(eeg=10e-5), events=True)
@@ -109,27 +111,35 @@ def compute_features(data):
         features.append(channel_features)
     return np.array(features)
 
-feature_matrix = compute_features(epochs)
+# feature_matrix = compute_features(normalized_epochs)
 
-# Display features
-num_epochs, num_channels, num_features = feature_matrix.shape
-m_mx = feature_matrix[:,:, 0]
-v_mx = feature_matrix[:,:, 1]
-std_mx = feature_matrix[:,:, 2]
-rms_mx = feature_matrix[:,:, 3]
+# Compute Power Spectral Density
+epoch_spectrum = normalized_epochs.compute_psd(method="multitaper")
+psds, freqs = epoch_spectrum.get_data(return_freqs=True)
 
+# Compute exponent of aperiodic component
+def compute_aperiodic_slope(freqs, psds):
+    fm = FOOOF()
+    features = []
+    # freq_range=[1, 40]
+    for epoch in range(psds.shape[0]):
+        print(f"Epoch {epoch} gives exps:")
+        channel_features=[]
+        for channel in range(psds.shape[1]):
+            fm.fit(freqs, psds[epoch, channel,:])
+            exp = fm.get_params('aperiodic_params', 'exponent')
+            # print(f"Epoch {epoch} gives exps:{exp}")
+            channel_features.append(exp)
+        features.append(channel_features)
+    return np.array(features)
+
+lambda_matrix = compute_aperiodic_slope(freqs, psds)
+
+# Display aperiodic slope
+_, num_channels = lambda_matrix.shape
 col = [f"Ch_{i+1}" for i in range(num_channels)]
-feature_matrix_reshape = feature_matrix.reshape(num_epochs, -1)
-mean_matrix = pd.DataFrame(m_mx, columns = col)
-variance_matrix = pd.DataFrame(v_mx, columns = col)
-std_matrix = pd.DataFrame(std_mx, columns = col)
-rms_matrix = pd.DataFrame(rms_mx, columns = col)
-
-print(f"MEAN:\n{mean_matrix.head()}")
-print(f"VARIANCE:\n{variance_matrix.head()}")
-print(f"STANDARD DEVIATION:\n{std_matrix.head()}")
-print(f"RMS:\n{rms_matrix.head()}")
-
+lambda_matrix_pd = pd.DataFrame(lambda_matrix, columns = col)
+print(f"Aperiodic slope:\n{lambda_matrix_pd}")
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
