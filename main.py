@@ -3,7 +3,8 @@ import mne
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from fooof import FOOOF
+from fooof import FOOOF, FOOOFGroup
+import time
 
 # Temporary test file
 file = 'chb01_16.edf'
@@ -119,27 +120,50 @@ psds, freqs = epoch_spectrum.get_data(return_freqs=True)
 
 # Compute exponent of aperiodic component
 def compute_aperiodic_slope(freqs, psds):
-    fm = FOOOF()
-    features = []
-    # freq_range=[1, 40]
-    for epoch in range(psds.shape[0]):
-        print(f"Epoch {epoch} gives exps:")
-        channel_features=[]
-        for channel in range(psds.shape[1]):
-            fm.fit(freqs, psds[epoch, channel,:])
-            exp = fm.get_params('aperiodic_params', 'exponent')
-            # print(f"Epoch {epoch} gives exps:{exp}")
-            channel_features.append(exp)
-        features.append(channel_features)
-    return np.array(features)
+    # fm = FOOOF()
+    # features = []
+    # # freq_range=[1, 40]
+    # for epoch in range(psds.shape[0]):
+    #     print(f"Epoch {epoch} gives exps:")
+    #     channel_features=[]
+    #     for channel in range(psds.shape[1]):
+    #         fm.fit(freqs, psds[epoch, channel,:])
+    #         exp = fm.get_params('aperiodic_params', 'exponent')
+    #         # print(f"Epoch {epoch} gives exps:{exp}")
+    #         channel_features.append(exp)
+    #     features.append(channel_features)
+    # return np.array(features)
+    
+    start = time.time()
+    fm = FOOOFGroup()
+    psds_reshape = psds.reshape(-1, psds.shape[-1])
+    fm.fit(freqs, psds_reshape)
+    exps = fm.get_params('aperiodic_params', 'exponent')
+    exps_reshape = exps.reshape(psds.shape[:-1])
+    end = time.time()
+    print(f"Time for computing exponent: {end - start:.4f} seconds\n")
+    return exps_reshape
 
-lambda_matrix = compute_aperiodic_slope(freqs, psds)
-
+if os.path.exists("aperiodic_exps.npy"):
+    lambda_matrix = np.load("aperiodic_exps.npy")
+else:
+    lambda_matrix = compute_aperiodic_slope(freqs, psds)
+    np.save("aperiodic_exps.npy", lambda_matrix)
+    
 # Display aperiodic slope
 _, num_channels = lambda_matrix.shape
 col = [f"Ch_{i+1}" for i in range(num_channels)]
 lambda_matrix_pd = pd.DataFrame(lambda_matrix, columns = col)
-print(f"Aperiodic slope:\n{lambda_matrix_pd}")
+print(f"Aperiodic exponent:\n{lambda_matrix_pd}")
+
+plt.figure(figsize=(10, 6))
+for ch in range(lambda_matrix.shape[1]):
+    plt.plot(range(index,index+30), lambda_matrix[index:index+30, ch], label=f'Ch {ch+1}')
+plt.xlabel("Epoch")
+plt.ylabel("Aperiodic exp")
+plt.title("Aperiodic exp over epochs")
+plt.legend()
+plt.show()
 
 # Plot the data
 print("----- PLOTTING DATA ----\n")
