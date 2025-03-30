@@ -6,8 +6,22 @@ import pandas as pd
 from fooof import FOOOF, FOOOFGroup
 import time
 
+# Get the parent directory of the current script (assuming the script is in the 'src' directory)
+base_dir = os.path.dirname(os.path.abspath(__file__))  # This will give the path to 'src'
+parent_dir = os.path.dirname(base_dir)  # This will give '/home/sappo/KEX'
+
+# Define the relative paths for the directories you want to create, relative to the parent directory
+processed_data_dir = os.path.join(parent_dir, 'processed_data')
+dummy_data_dir = os.path.join(parent_dir, 'dummy_data')
+data_dir = os.path.join(parent_dir, os.path.join('data', "physionet.org", "files", "chbmit", "1.0.0", "chb01"))
+
+# Create directories if they don't exist
+os.makedirs(processed_data_dir, exist_ok=True)
+os.makedirs(dummy_data_dir, exist_ok=True)
+os.makedirs(data_dir, exist_ok=True)
+
 # Temporary test file
-file = 'chb01_16.edf'
+file = os.path.join(dummy_data_dir, 'chb01_16.edf')
 
 # Loading the datafile
 raw_edf = mne.io.read_raw_edf(file, preload = True)
@@ -22,7 +36,7 @@ print("----- DATA AS ARRAY ----\n" + str(data))
 
 # Saving data
 print("----- SAVING DATA ----\n")
-np.save(file="my_data.npy", arr=data)
+np.save(file= os.path.join(processed_data_dir, "my_data.npy"), arr=data)
 
 # Extract annotations
 print("----- EXTRACT ANNOTATIONS ----\n")
@@ -31,7 +45,7 @@ seizure_offsets = []
 seizure_descriptions = []
 findFile = False
 
-with open("chb01-summary.txt", "r") as f:
+with open(os.path.join(dummy_data_dir, "chb01-summary.txt"), "r") as f:
     for l in f:
         if l.strip() == "File Name: chb01_16.edf": 
             findFile = True
@@ -53,7 +67,7 @@ annots = mne.Annotations(onset=seizure_onsets, duration=seizure_durations, descr
 raw_edf.set_annotations(annots)
 print(annots)
 print(f"Seizure event: {annots.onset[0], annots.duration[0]}")
-annots.save("annotations.csv", overwrite=True)
+annots.save(os.path.join(processed_data_dir,"annotations.csv"), overwrite=True)
 
 # Extract events from annotations
 print("----- EXTRACT EVENTS ----\n")
@@ -90,6 +104,7 @@ def normalization(data):
 
 normalized_epochs = epochs.copy()
 normalized_epochs.apply_function(normalization, 'all')
+np.save(file= os.path.join(processed_data_dir, "preprocessed_data.npy"), arr=normalized_epochs.get_data())
 
 # Computing basic features
 print("----- FEATURE EXTRACTION ----\n")
@@ -119,7 +134,7 @@ epoch_spectrum = normalized_epochs.compute_psd(method="multitaper")
 psds, freqs = epoch_spectrum.get_data(return_freqs=True)
 
 # Compute exponent of aperiodic component
-def compute_aperiodic_slope(freqs, psds):
+def compute_aperiodic_slope(freqs, psds, fm):
     # fm = FOOOF()
     # features = []
     # # freq_range=[1, 40]
@@ -135,7 +150,6 @@ def compute_aperiodic_slope(freqs, psds):
     # return np.array(features)
     
     start = time.time()
-    fm = FOOOFGroup()
     psds_reshape = psds.reshape(-1, psds.shape[-1])
     fm.fit(freqs, psds_reshape)
     exps = fm.get_params('aperiodic_params', 'exponent')
@@ -144,11 +158,13 @@ def compute_aperiodic_slope(freqs, psds):
     print(f"Time for computing exponent: {end - start:.4f} seconds\n")
     return exps_reshape
 
-if os.path.exists("aperiodic_exps.npy"):
-    lambda_matrix = np.load("aperiodic_exps.npy")
+fm = FOOOFGroup()
+
+if os.path.exists(os.path.join(processed_data_dir,"aperiodic_exps.npy")):
+    lambda_matrix = np.load(os.path.join(processed_data_dir,"aperiodic_exps.npy"))
 else:
-    lambda_matrix = compute_aperiodic_slope(freqs, psds)
-    np.save("aperiodic_exps.npy", lambda_matrix)
+    lambda_matrix = compute_aperiodic_slope(freqs, psds, fm)
+    np.save(os.path.join(processed_data_dir,"aperiodic_exps.npy"), lambda_matrix)
     
 # Display aperiodic slope
 _, num_channels = lambda_matrix.shape
@@ -156,17 +172,8 @@ col = [f"Ch_{i+1}" for i in range(num_channels)]
 lambda_matrix_pd = pd.DataFrame(lambda_matrix, columns = col)
 print(f"Aperiodic exponent:\n{lambda_matrix_pd}")
 
-plt.figure(figsize=(10, 6))
-for ch in range(lambda_matrix.shape[1]):
-    plt.plot(range(index,index+30), lambda_matrix[index:index+30, ch], label=f'Ch {ch+1}')
-plt.xlabel("Epoch")
-plt.ylabel("Aperiodic exp")
-plt.title("Aperiodic exp over epochs")
-plt.legend()
-plt.show()
-
 # Plot the data
 print("----- PLOTTING DATA ----\n")
 normalized_epochs[index:].plot(block=True, n_epochs=5, scalings=dict(eeg=1), events=True)
-unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
-raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
+# unfiltered_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
+# raw_edf.plot(block=True, scalings=dict(eeg=10e-5), start=annots.onset[0], duration=annots.duration[0])
