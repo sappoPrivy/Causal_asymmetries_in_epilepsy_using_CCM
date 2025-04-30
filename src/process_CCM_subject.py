@@ -1,4 +1,4 @@
-# @Author Tenzin Sangpo Choedon 
+# Author @Tenzin Sangpo Choedon 
 
 import logging
 import os
