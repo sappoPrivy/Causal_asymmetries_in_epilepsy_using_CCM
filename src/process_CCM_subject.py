@@ -1,3 +1,5 @@
+# @Author Tenzin Sangpo Choedon 
+
 import logging
 import os
 from pathlib import Path
@@ -21,6 +23,8 @@ warnings.filterwarnings("ignore")
 import time
 import multiprocessing as mp
 from statsmodels.tsa.stattools import acf
+
+######## START CCM CODE #########
 
 # Computing "Causality" (Correlation between True and Predictions)
 class ccm:
@@ -265,9 +269,7 @@ class ccm:
         axs[1].set_title(f'tau={tau}, E={E}, L={L}, Correlation coeff = {r}')
         plt.show()
 
-######## MODIFY FOLLOWING CODES #########
-
-# Author @Tenzin Sangpo Choedon
+######## END CCM CODE #########
 
 def compute_ccm_over_window(limit_channels, X_c, output_filename):
     # Stores all correlations
