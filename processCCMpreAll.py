@@ -1,4 +1,7 @@
+import logging
 import os
+from pathlib import Path
+import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,6 +17,7 @@ import warnings
 warnings.filterwarnings("ignore")
 # import jdc
 import time
+import multiprocessing as mp
 
 # Computing "Causality" (Correlation between True and Predictions)
 class ccm:
@@ -34,7 +38,7 @@ class ccm:
         self.My = self.shadow_manifold(Y) # shadow manifold for Y (we want to know if info from X is in Y)
         self.t_steps, self.dists = self.get_distances(self.My) # for distances between points in manifold    
 
-    # %%add_to ccm
+# %%add_to ccm
     def shadow_manifold(self, X):
         """
         Given
@@ -53,8 +57,7 @@ class ccm:
                 x_lag.append(X[t-t2*self.tau])            
             M[t] = x_lag
         return M
-
-    # %%add_to ccm
+    
     # get pairwise distances between vectors in X
     def get_distances(self, Mx):
         """
@@ -73,7 +76,6 @@ class ccm:
         vecs = np.array([i[1] for i in t_vec])
         dists = distance.cdist(vecs, vecs)    
         return t_steps, dists
-
 
     # %%add_to ccm
     def get_nearest_distances(self, t, t_steps, dists):
@@ -96,7 +98,6 @@ class ccm:
         nearest_distances = dist_t[nearest_inds]  
         
         return nearest_timesteps, nearest_distances
-
 
     # %%add_to ccm
     def predict(self, t):
@@ -122,7 +123,6 @@ class ccm:
         X_hat = (w * X_cor).sum() # get X_hat
         
         return X_true, X_hat
-
 
     # %%add_to ccm
     def causality(self):
@@ -262,10 +262,10 @@ class ccm:
         axs[1].set_title(f'tau={tau}, E={E}, L={L}, Correlation coeff = {r}')
         plt.show()
 
+######## MODIFY FOLLOWING CODES #########
 
-################# MODIFIED CODE #####################
 def plot_convergence(filename, X, Y):
-    L_range = range(50, 3200, 200) # L values to test
+    L_range = range(50, 5000, 200) # L values to test
     tau = 1
     E = 2
 
@@ -296,59 +296,89 @@ def plot_heatmap(matrix, filename, limit_channels):
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
+
+def ccm1(subject, proc_data_dir, output_dir, sample_type):
     
-def compute_ccm(X_c, filename):
-    # Stores all correlations
-    Xhat_My_f = []
-    Yhat_Mx_f = []
+    print(f"Starting subject {subject}")
+    subject_dir = Path(proc_data_dir + "/" + subject)
+    all_files = [f for f in os.listdir(os.path.join(subject_dir,sample_type)) if os.path.isfile(os.path.join(subject_dir,sample_type, f))][:n_samples]
+    # random_files = random.sample(all_files, min(n_samples, len(all_files)))
+    
+    for filename in all_files:
+        print(filename)
+        # Output dir
+        output_dir_subj = output_dir + '/' + subject
+        output_filename = output_dir_subj + '/' + os.path.splitext(filename)[0] + '-' + sample_type
+        os.makedirs(output_dir_subj, exist_ok=True)
+    
+        # Load the data
+        X = np.load(os.path.join(proc_data_dir, subject, sample_type, filename))['arr']
+        n_channels, n_times = X.shape
+        print(X.shape)
 
-    # Limits
-    limit_channels = 4
-
-    start_time = time.perf_counter()
-
-    # Reading channels of control file
-    for i in range (0,limit_channels-1):
-        X_c0 = X_c.iloc[i]
-        X0 = X_c0[start_index:start_index + window]
-        Xhat_My1 = []
-        Yhat_Mx1 = []
+        # Limits
+        limit_channels = 4
         
-        for j in range(i+1,limit_channels):
-            X_c1 = X_c.iloc[j]
-            Y0=X_c1[start_index:start_index + window]
-            X0=np.array(X_c0)
-            Y0=np.array(X_c1)
-            Xhat_My, Yhat_Mx = [], []
-            
-            plot_convergence(filename+"-convergence", X0, Y0)
-            
-            # Apply CCM per non-overlapping window of the time series
-            for start in range(0, signal_length - window_size + 1, step_size):
-                X = X0[start:start + window_size]
-                Y = Y0[start:start + window_size]               
-                
-                # Apply CCM to channel pair 
-                ccm_XY = ccm(X, Y, tau, E, L) # define new ccm object # Testing for X -> Y
-                ccm_YX = ccm(Y, X, tau, E, L) # define new ccm object # Testing for Y -> X
-        
-                Xhat_My.append(ccm_XY.causality()[0]) 
-                Yhat_Mx.append(ccm_YX.causality()[0])
-                
-                print("PLOTTING")
-                ccm_XY.plot_ccm_correls()
-                ccm_YX.plot_ccm_correls()
-                
-            Xhat_My1.append(Xhat_My)
-            Yhat_Mx1.append(Yhat_Mx)
-            
-        Xhat_My_f.append(Xhat_My1)
-        Yhat_Mx_f.append(Yhat_Mx1)
+        start_time = time.perf_counter()
 
-    end_time = time.perf_counter()
+        if len(X[0,:]) > start_index + end_index:
+            
+            #Variable Initialization
+            Xhat_My_f = []
+            Yhat_Mx_f = []
+            ccm_correls = np.zeros((limit_channels, limit_channels))
+            
+            #Reading channels
+            for i in range (0,limit_channels-1):
+                Xhat_My, Yhat_Mx = [], []
+                X0 = X[i,start_index:end_index]
+                for j in range(i+1,limit_channels):
+                    print(j)
+                    Y0=X[j,start_index:end_index]
+                    
+                    #Applying CCM to channel pair 
+                    ccm_XY = ccm(X0, Y0, tau, E, L) # define new ccm object # Testing for X -> Y
+                    ccm_YX = ccm(Y0, X0, tau, E, L) # define new ccm object # Testing for Y -> X
+                    
+                    ccm_XY_corr = ccm_XY.causality()[0]
+                    ccm_YX_corr = ccm_YX.causality()[0]
+                    
+                    ccm_correls[i, j] = ccm_XY_corr # X -> Y over triangle
+                    ccm_correls[j, i] = ccm_YX_corr # Y -> X under triangle
+                    
+                    Xhat_My.append(ccm_XY_corr)
+                    Yhat_Mx.append(ccm_YX_corr)
 
-    execution_time = end_time - start_time
-    print(f"Execution Time: {execution_time:.5f} seconds")
+                Xhat_My_f.append(Xhat_My)
+                Yhat_Mx_f.append(Yhat_Mx)
+
+            X_Y_arr = np.zeros((len(Yhat_Mx_f)+1,len(Yhat_Mx_f)+1))
+            for i in range(len(X_Y_arr)-1):
+                for j in range(0,len(Yhat_Mx_f[i])):
+                    X_Y_arr[i,i+1+j] = Yhat_Mx_f[i][j]
+                    X_Y_arr[i+1+j,i] = Xhat_My_f[i][j]
+
+            # Save the array
+            np.savez_compressed(output_filename, X_Y_arr)
+            
+            # plot_heatmap(ccm_XY_correls, "CCM heatmap of X → Y", output_filename+"-ccm_XY_heatmap.png", limit_channels)
+            # plot_heatmap(ccm_YX_correls, "CCM heatmap of Y → X",  output_filename+"-ccm_YX_heatmap.png", limit_channels)
+            # plot_heatmap(ccm_YX_correls, "Correl(X → Y) - Correl(Y → X)",  output_filename+"-ccm_diffs_heatmap.png", limit_channels)
+            
+            # plot_heatmap(ccm_correls,  output_filename+"-ccm_heatmap.png", limit_channels)
+        end_time = time.perf_counter()
+
+
+# CCM Parameters
+np.random.seed(1)
+L=15000     # length of time period
+tau=1       # time lag
+E=2         # embedding dimensions
+
+# Select chunk
+start_index = 0
+end_index = start_index + L
+n_samples = 1
 
 # Get the parent directory
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -356,31 +386,23 @@ parent_dir = os.path.dirname(base_dir)
 
 # Define the relative paths
 proc_data_dir = os.path.join(parent_dir, 'processed_data')
-data_dir = os.path.join(parent_dir, os.path.join('data', "chbmit-1.0.0.physionet.org"))
 output_dir = os.path.join(parent_dir, 'output_data')
+os.makedirs(output_dir, exist_ok=True)
 
-# Load data
-data_c = np.load(proc_data_dir+ '/chb01/nonses/sample-1.npz')['arr']   #Control file
-data_p = np.load(proc_data_dir+ '/chb01/ses/sample-1.npz')['arr']      #patient file
-n_channels_c, n_times_c = data_c.shape
-n_channels_p, n_times_p = data_p.shape
-X_c= pd.DataFrame(data_c)
-X_p= pd.DataFrame(data_p)
-print(data_c.shape)
-print(data_c.shape)
+list_subjects = [f"chb{str(i).zfill(2)}" for i in range(1, 25)]
+num_cores = mp.cpu_count()
+args_ses_list = [(subject, proc_data_dir, output_dir, "ses") for subject in list_subjects]
+args_nonses_list = [(subject, proc_data_dir, output_dir, "nonses") for subject in list_subjects]
 
-# Sliding window
-window_size = 100   # Window length (you can adjust this)
-step_size = 100     # Step size for moving the window
-signal_length = min(n_times_c, n_times_p)
-start_index = 0
-window = min(n_times_c, n_times_p)
+ccm1("chb01", proc_data_dir, output_dir, "nonses")
+ccm1("chb01", proc_data_dir, output_dir, "ses")
 
-# CCM Parameters
-np.random.seed(1)
-L=window_size   # length of time period
-tau=1           # time lag
-E=2             # embedding dimensions
+# pool = mp.Pool(8)
+# results_ses = pool.starmap(ccm1,args_ses_list)
+# pool.close()
+# pool.join()
 
-compute_ccm(X_c, output_dir+"/chb01/sample-1-nonses")
-# compute_ccm(X_p,  output_dir+"/chb01/sample-1")
+# pool = mp.Pool(8)
+# results_nonses = pool.starmap(ccm1,args_nonses_list)
+# pool.close()
+# pool.join()

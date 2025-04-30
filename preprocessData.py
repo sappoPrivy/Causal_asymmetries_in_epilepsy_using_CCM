@@ -1,6 +1,8 @@
 from functools import partial
 import logging
 import os
+import random
+import re
 import mne
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,9 +38,9 @@ class edf_data:
                     continue
                 if findFile:
                     if l.strip() == '': break;    
-                    if l.startswith("Seizure Start Time:"):
+                    if l.startswith("Seizure") and "Start Time:" in l:
                         seizure_onsets.append(float(l.split(":")[1].strip().split(" ")[0]))
-                    if l.startswith("Seizure End Time:"):
+                    if l.startswith("Seizure") and "End Time:" in l:
                         seizure_offsets.append(float(l.split(":")[1].strip().split(" ")[0]))
             
         seizure_durations = [offset-onset for onset, offset in zip(seizure_onsets, seizure_offsets)]
@@ -49,15 +51,15 @@ class edf_data:
 
         # Saving annotation object for data
         self.raw.set_annotations(annots)
-        print(annots)
+        # print(annots)
         
         for i in range(len(seizure_onsets)):
             print(f"Seizure event: {annots.onset[i], annots.duration[i]}")
 
-        # Extract events from annotations
-        print("----- EXTRACT EVENTS ----\n")
-        events, event_id = mne.events_from_annotations(self.raw)
-        print(events)
+        # # Extract events from annotations
+        # print("----- EXTRACT EVENTS ----\n")
+        # events, event_id = mne.events_from_annotations(self.raw)
+        # print(events)
     
     # Band-pass Filtering
     def filtering(self):    
@@ -111,11 +113,11 @@ class edf_data:
         
         fm = FOOOFGroup()
 
-        if os.path.exists(os.path.join(proc_data_dir,"aperiodic_exps.npy")):
-            lambda_matrix = np.load(os.path.join(proc_data_dir,"aperiodic_exps.npy"))
+        if os.path.exists(os.path.join(dummy_data_dir,"aperiodic_exps.npy")):
+            lambda_matrix = np.load(os.path.join(dummy_data_dir,"aperiodic_exps.npy"))
         else:
             lambda_matrix = self.compute_aperiodic_slope(freqs, psds, fm)
-            np.save(os.path.join(proc_data_dir,"aperiodic_exps.npy"), lambda_matrix)
+            np.save(os.path.join(dummy_data_dir,"aperiodic_exps.npy"), lambda_matrix)
             
         # Display aperiodic slope
         _, num_channels = lambda_matrix.shape
@@ -155,7 +157,22 @@ class edf_data:
         self.normalized.plot(block=True, n_epochs=5, scalings=dict(eeg=1), events=True)
         self.unfiltered.plot(block=True, scalings=dict(eeg=10e-5), start=self.raw.annotations.onset[0], duration=self.raw.annotations.duration[0])
         self.raw.plot(block=True, scalings=dict(eeg=10e-5), start=self.raw.annotations.onset[0], duration=self.raw.annotations.duration[0])
-    
+
+def plot_fooof_exponents():
+    # Loading the datafile
+    edf = edf_data("chb01_16.edf", "chb01", data_dir)
+
+    # Annotations
+    edf.annotations()
+    # edf.raw.annotations.save(os.path.join(proc_dir_subj,filename.stem +"_annotations.csv"), overwrite=True)
+
+    # Preprocessing
+    edf.filtering()
+    edf.segmenting()
+    normalized = edf.epochs.copy()
+    edf.normalized = normalized.apply_function(standardization, 'all')
+    edf.psd()
+
 # Normalization
 def standardization(data):
     mean = np.mean(data)
@@ -170,52 +187,81 @@ def standardization(data):
 def preprocess_subject(subject, data_dir, proc_data_dir):
     logging.debug(f"Starting subject {subject}")
     
+    num_ses=0
+    num_nonses=0
+    num_pre_ses=0
+    
     subject_dir = Path(data_dir + "/" + subject)
-    
-    limit_files = 2
-    
-    files = list(subject_dir.glob("*.edf"))
-
-    # Sort numerically
-    # sorted_files = sorted(files, key=lambda x: int(x.stem.split("_")[1]))
-    sorted_files = sorted(
-    files, key=lambda x: int(''.join(filter(str.isdigit, x.stem.split("_")[1]))))
-    
-    for filename in sorted_files:
+    num_files = 2
+    edf_files = [f for f in os.listdir(subject_dir) if f.endswith('.edf') and os.path.isfile(os.path.join(subject_dir, f))]
+    # edf_files_sorted = sorted(edf_files, key=lambda f: int(f.split('_')[1].split('.')[0]))
+    # random_edf_files = random.sample(edf_files, num_files)
+            
+    for filename in edf_files:
                 
         # Loading the datafile
-        edf = edf_data(filename.stem+filename.suffix, subject, data_dir)
-
-        # Querying the raw object through info object
-        # print("----- DATA INFO ----\n"+ str(edf.raw.info))
-
-        # Showing data
-        # print(f"Shape of data: (num_channels, num_samples) = {edf.data.shape}")
-        # print("----- DATA AS ARRAY ----\n" + str(edf.data))
-
-        # Output dir
+        edf = edf_data(filename, subject, data_dir)
+        
+        # Output dirs
         proc_dir_subj = proc_data_dir + '/' + subject
-        proc_filename = proc_dir_subj + '/' + filename.stem + '.npy'
         os.makedirs(proc_dir_subj, exist_ok=True)
 
         # Annotations
         edf.annotations()
-        edf.raw.annotations.save(os.path.join(proc_dir_subj,filename.stem +"_annotations.csv"), overwrite=True)
+        # edf.raw.annotations.save(os.path.join(proc_dir_subj,filename.stem +"_annotations.csv"), overwrite=True)
 
         # Preprocessing
         edf.filtering()
-        edf.segmenting()
-        normalized_epochs = edf.epochs.copy()
-        edf.normalized = normalized_epochs.apply_function(standardization, 'all')
-
-        # Save preprocessed data
-        np.save(file=proc_filename, arr=edf.normalized.get_data())
-
-        # if len(edf.raw.annotations.onset):
-            # edf.plot_edf()
         
-        limit_files-=1
-        if limit_files == 0: break
+        # Get the sampling frequency (in Hz)
+        sfreq = edf.raw.info['sfreq']
+        
+        if len(edf.raw.annotations.onset):
+            # edf.plot_edf()
+            
+            # Loop through each seizure and crop the data
+            for idx, ann in enumerate(edf.raw.annotations):
+                # Convert annotation start and stop time (in seconds)
+                start_time = ann['onset']
+                end_time = start_time + ann['duration']
+                
+                # Crop the data around the seizure
+                start_sample = int(start_time * sfreq)
+                stop_sample = int(end_time * sfreq)
+                
+                # Crop the data around the seizure
+                seizure_data = edf.raw.get_data(start=start_sample, stop=stop_sample)
+                
+                num_ses += 1
+                proc_filename = proc_dir_subj + '/ictal-data-' + str(num_ses)
+                
+                # Save the seizure data as a .npy file
+                np.savez_compressed(file=proc_filename, arr=seizure_data)
+                
+                print("Saved seizure to "+proc_filename)
+                
+                # Crop the data around the pre seizure
+                start_pre_sample = int((start_time-30) * sfreq)
+                stop_pre_sample = int(start_time * sfreq)
+                
+                # Crop the data around the pre seizure
+                pre_seizure_data = edf.raw.get_data(start=start_pre_sample, stop=stop_pre_sample)
+                
+                num_pre_ses += 1
+                proc_pre_filename = proc_dir_subj + '/pre-ictal-data-' + str(num_pre_ses)
+                
+                # Save the pre seizure data as a .npy file
+                np.savez_compressed(file=proc_pre_filename, arr=pre_seizure_data)
+                
+                print("Saved pre seizure to "+proc_pre_filename)
+            
+        else:
+            if filename=="chb01_01.edf":
+                num_nonses += 1
+                proc_filename = proc_dir_subj + '/control-data' #+ str(num_nonses)
+                # Save preprocessed data
+                np.savez_compressed(file=proc_filename, arr=edf.raw.get_data())
+                print("Saved non seizure to "+proc_filename)
 
 np.random.seed(1)
 
@@ -237,6 +283,16 @@ os.makedirs(data_dir, exist_ok=True)
 # subject = 'chb01'
 # preprocess(subject)
 
+# All subjects
+# list_subjects = [f"chb{str(i).zfill(2)}" for i in range(1, 25)]
+# args_list = list_subjects
+# num_cores = mp.cpu_count()
+# preprocess_partial = partial(preprocess_subject, data_dir=data_dir, proc_data_dir=proc_data_dir)
+# pool = mp.Pool(num_cores)
+# result = pool.map(preprocess_partial, args_list)
+# pool.close()
+# pool.join()
+
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
 
@@ -247,7 +303,10 @@ if __name__ == '__main__':
     # Not correctly working
     # with mp.Pool(num_cores//2, maxtasksperchild=1) as pool:
     #     pool.starmap(preprocess_subject, args_list, chunksize=1)
-
-    # linear
-    for args in args_list:
-        preprocess_subject(*args)
+    
+    # plot_fooof_exponents()
+    
+    preprocess_subject("chb01",data_dir, proc_data_dir)
+    
+    # for args in args_list:
+    #     preprocess_subject(*args)
