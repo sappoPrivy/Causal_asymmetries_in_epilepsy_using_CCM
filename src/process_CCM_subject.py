@@ -271,6 +271,28 @@ class ccm:
 
 ######## END CCM CODE #########
 
+def plot_convergence(filename, L_range, X, Y):
+    L_range = range(6000, 8000, 200) # L values to test
+    tau = 1
+    E = 2
+
+    Xhat_My, Yhat_Mx = [], [] # correlation list
+    for L in L_range: 
+        ccm_XY = ccm(X, Y, tau, E, L) # define new ccm object # Testing for X -> Y
+        ccm_YX = ccm(Y, X, tau, E, L) # define new ccm object # Testing for Y -> X    
+        Xhat_My.append(ccm_XY.causality()[0]) 
+        Yhat_Mx.append(ccm_YX.causality()[0]) 
+    
+    # plot convergence as L->inf. Convergence is necessary to conclude causality
+    plt.figure(figsize=(5,5))
+    plt.plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
+    plt.plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
+    plt.xlabel('L', size=12)
+    plt.ylabel('correl', size=12)
+    plt.legend(prop={'size': 16})    
+    plt.savefig(filename)
+    plt.close()
+
 def compute_ccm_over_window(limit_channels, X_c, output_filename):
     # Stores all correlations
     Xhat_My_f = []
@@ -483,7 +505,6 @@ def ccm_subject(subject, proc_data_dir, output_dir):
     
     # OLD: test over window
     # OLD: compute_ccm_over_window(limit_channels, X_ps, output_dir_subj)
-
 
 # CCM Parameters
 np.random.seed(1)
