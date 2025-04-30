@@ -24,28 +24,6 @@ import time
 import multiprocessing as mp
 from statsmodels.tsa.stattools import acf
 
-def plot_convergence(filename, L_range, X, Y):
-    L_range = range(6000, 8000, 200) # L values to test
-    tau = 1
-    E = 2
-
-    Xhat_My, Yhat_Mx = [], [] # correlation list
-    for L in L_range: 
-        # ccm_XY = ccm(X, Y, tau, E, L) # define new ccm object # Testing for X -> Y
-        # ccm_YX = ccm(Y, X, tau, E, L) # define new ccm object # Testing for Y -> X    
-        # Xhat_My.append(ccm_XY.causality()[0]) 
-        # Yhat_Mx.append(ccm_YX.causality()[0]) 
-    
-    # plot convergence as L->inf. Convergence is necessary to conclude causality
-    plt.figure(figsize=(5,5))
-    plt.plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
-    plt.plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
-    plt.xlabel('L', size=12)
-    plt.ylabel('correl', size=12)
-    plt.legend(prop={'size': 16})    
-    plt.savefig(filename)
-    plt.close()
-
 def plot_overall_convergence(output_filename, L_range, E_range, tau_range):
     X = np.load(output_filename+'.npz')
     
@@ -240,15 +218,7 @@ def compute_reference_matrix(output_filename, L, E_range, tau_range, limit_chann
 def ccm_subject(subject, proc_data_dir, output_dir):
     
     print(f"Starting subject {subject}")
-    subject_dir = Path(proc_data_dir + "/" + subject)
     limit_channels = [1, 4, 5, 7, 8, 9, 12, 13, 18, 21]
-    
-    # Selected controle fil
-    control_file = os.path.join(subject_dir, "control-data.npz")
-    
-    # Selected patient files
-    patient_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="ictal"]
-    patient_pre_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="pre"]
     
     # Output paths
     output_dir_subj = output_dir + '/' + subject
@@ -256,47 +226,41 @@ def ccm_subject(subject, proc_data_dir, output_dir):
     output_filename_c=output_dir_subj+"/control-file"
     output_filename_ic = output_dir_subj + '/patient-ictal-file'
     output_filename_pre = output_dir_subj + '/patient-pre-ictal-file'
-    
-    # Load non-seizure data
-    X_c = np.load(os.path.join(proc_data_dir, subject, "nonses", control_file))['arr']
-    
-    # OLD: Testing convergence on control file for one channel pair
-    # OLD: plot_convergence(output_filename_c+f"-small-Ch({ch1,ch2})-convergence", X_c[ch1], X_c[ch2])
-    
+        
     # Parameters range
     L_range = [6000, 7000, 8000, 9000, 10000]
     E_range = [2,3]
     tau_range=[1,2]
     
-    # STEP 2: Plot overall convergence of control file to decide L
-    # plot_overall_convergence(output_filename_c, L_range, E_range, tau_range)
+    # STEP 1: Plot overall convergence of control file to determine L
+    plot_overall_convergence(output_filename_c, L_range, E_range, tau_range)
     
-    # STEP 3: Compute the reference which is the inter-ictal average matrix for the selected L
-    # ref_mx = compute_reference_matrix(output_filename_c, L_range[4], E_range, tau_range, limit_channels)
-    # plot_heatmaps(L_range[4], E_range, tau_range, output_filename_c, limit_channels, ref_mx, 'Inter-ictal')
-    
-    # STEP 4: Compute ccm on ictal file across params
-    # plot_heatmaps(L_range[4], E_range, tau_range, output_filename_ic, limit_channels, ref_mx, 'Ictal')
-    
-    # STEP 5: Compute ccm on pre ictal file across params
-    # plot_heatmaps(L_range[4], E_range, tau_range, output_filename_pre, limit_channels, ref_mx, 'Pre-ictal')
-        
-    # STEP 6: Compute metrics across params for files
-    # compute_metrics(output_filename_ic, ref_mx, L_range[4], E_range, tau_range)
-    # compute_metrics(output_filename_pre, ref_mx, L_range[4], E_range, tau_range)
-    # compute_metrics(output_filename_c, ref_mx, L_range[4], E_range, tau_range)
-    
-    # STEP 8: Box plots across states for each parameter set
-    # plot_boxplots(output_filename_c, output_filename_ic, output_filename_pre, output_dir_subj, L_range[4], E_range, tau_range)
-    
-    # STEP 9: Compute outflow for channels across fixed parameters
-    # compute_high_outflow(output_filename_c, L_range[4], E_range[1], tau_range[1], limit_channels)
-    # compute_high_outflow(output_filename_ic, L_range[4], E_range[1], tau_range[1], limit_channels)
-    # compute_high_outflow(output_filename_pre, L_range[4], E_range[1], tau_range[1], limit_channels)
-    
-    # Plot autocorrelation of time lagged values
+    # STEP 2: Plot autocorrelation of time lagged control time series to determine tau
     plot_autocorrelation(output_filename_c, L_range[4], E_range, tau_range)
-
+    
+    # STEP 3: Compute markovs process to determine E
+    
+    # OLD: Compute the reference which is the inter-ictal average matrix for the selected L
+    # ref_mx = compute_reference_matrix(output_filename_c, L_range[4], E_range, tau_range, limit_channels)
+    
+    # STEP 4: Plot heatmaps for the causality matrix with optimal param set of all files
+    # plot_heatmaps(L_range[4], [E_range[0]], [tau_range[0]], output_filename_c, limit_channels, ref_mx, 'Inter-ictal')
+    # plot_heatmaps(L_range[4], [E_range[0]], [tau_range[0]], output_filename_ic, limit_channels, ref_mx, 'Ictal')
+    # plot_heatmaps(L_range[4], [E_range[0]], [tau_range[0]], output_filename_pre, limit_channels, ref_mx, 'Pre-ictal')
+    
+    # STEP 5: Compute asymmetry index (metrics) of causality matrix with optimal param set for files
+    # compute_metrics(output_filename_ic, ref_mx, L_range[4], [E_range[0]], [tau_range[0]])
+    # compute_metrics(output_filename_pre, ref_mx, L_range[4], [E_range[0]], [tau_range[0]])
+    # compute_metrics(output_filename_c, ref_mx, L_range[4], [E_range[0]], [tau_range[0]])
+    
+    # STEP 6: Compute outflow for channels of causality matrix with optimal param set for files
+    # compute_high_outflow(output_filename_c, L_range[4], [E_range[0]], [tau_range[0]], limit_channels)
+    # compute_high_outflow(output_filename_ic, L_range[4], [E_range[0]], [tau_range[0]], limit_channels)
+    # compute_high_outflow(output_filename_pre, L_range[4], [E_range[0]], [tau_range[0]], limit_channels)
+    
+    # STEP 7: Box plots across states for optimal parameter set
+    # plot_boxplots(output_filename_c, output_filename_ic, output_filename_pre, output_dir_subj, L_range[4], [E_range[0]], [tau_range[0]])
+    
 
 # Get the parent directory
 base_dir = os.path.dirname(os.path.abspath(__file__))
