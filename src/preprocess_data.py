@@ -1,3 +1,5 @@
+# Author @Tenzin Sangpo Choedon
+
 from functools import partial
 import logging
 import os
@@ -15,8 +17,6 @@ from multiprocessing import Pool
 from pathlib import Path
 import warnings
 warnings.filterwarnings("ignore")
-
-# Author @Tenzin Sangpo Choedon
 
 class Subject:
     def __init__(self, subject, data_dir):
