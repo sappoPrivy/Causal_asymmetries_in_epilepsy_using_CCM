@@ -2,8 +2,29 @@
 _Degree Project in Computer Science and Engineering, First cycle, 15 credits_
 
 ## 📄 Abstract
-
-<!-- Brief summary of your thesis -->
+Exploring brain connectivity is essential to gain a deeper understanding of
+epileptic seizure dynamics. Particularly, effective connectivity is used for de-
+tecting causal relationships between neural regions, with Granger Causality
+(GC) being a widely recognized measurement. However, identifying the spe-
+cific EEG channels that are causally involved in epilepsy remains a challenge.
+Convergent Cross Mapping (CCM) has been developed to address these lim-
+itations of GC. Despite the potential of CCM, there have been minimal real
+applications in epilepsy. Additionally, previous research suggests that there is
+a stronger directional causal influence on certai brain regions during seizures.
+Therefore, this study explores causal asymmetries across channels in epilepsy
+by applying CCM to EEG data. The methodology of this study involves pre-
+processing the data from the CHB-MIT dataset, passing it into the CCM al-
+gorithm, tuning the CCM parameters, and evaluating the resulting causality
+across non-seizure, preictal and ictal states through asymmetry measures. The
+results indicate that causality patterns are generally more asymmetric during
+pre-seizure and seizure activity compared to non-seizure activity. Further-
+more, results from individual channels suggest that channels 20 and 21, as
+well as channels 6 and 12 most consistently exhibit the highest asymmetry
+in causality for pre-seizure and seizure activity, respectively, which is par-
+tially consistent with previous findings. It is concluded that CCM can be ap-
+plied, with the improvements of scalable methods, to identify potential EEG
+channels that are important for underlying directional connectivity involved in
+seizure dynamics.
 
 ## 🗂️ Table of Contents
 
