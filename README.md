@@ -14,16 +14,19 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 - [Thesis Document](#-thesis-document)
 
 ## 🏗️ Project Structure
+
+```text
 root/
 ├── src/
-│ ├── preprocess_data.py
-│ ├── process_CCM_subjects.py
-│ └── eval_CCM_subjects.py
+│   ├── preprocess_data.py
+│   ├── process_CCM_subjects.py
+│   └── eval_CCM_subjects.py
 ├── docs/
-│ ├── thesis.pdf
-│ └── references.bib
+│   ├── thesis.pdf
+│   └── references.bib
 ├── README.md
 └── .gitignore
+
 
 ## ✅ Prerequisites
 
