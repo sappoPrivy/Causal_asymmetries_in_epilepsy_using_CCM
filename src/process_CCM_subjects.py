@@ -1,9 +1,10 @@
-# Author @Tenzin Sangpo Choedon 
+# Author @Tenzin Sangpo Choedon
 
 import logging
 import os
 from pathlib import Path
 import random
+from typing import Counter
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -23,6 +24,7 @@ warnings.filterwarnings("ignore")
 import time
 import multiprocessing as mp
 from statsmodels.tsa.stattools import acf
+import pyEDM
 
 ######## START CCM CODE #########
 
@@ -271,33 +273,226 @@ class ccm:
 
 ######## END CCM CODE #########
 
-def plot_convergence(filename, L_range, X, Y):
-    L_range = range(6000, 8000, 200) # L values to test
-    tau = 1
-    E = 2
-
-    Xhat_My, Yhat_Mx = [], [] # correlation list
-    for L in L_range: 
-        ccm_XY = ccm(X, Y, tau, E, L) # define new ccm object # Testing for X -> Y
-        ccm_YX = ccm(Y, X, tau, E, L) # define new ccm object # Testing for Y -> X    
-        Xhat_My.append(ccm_XY.causality()[0]) 
-        Yhat_Mx.append(ccm_YX.causality()[0]) 
+# Test convergence for a single channel pair
+def plot_convergence(Title, filename, L_range, Es, taus, Xs, Ys):
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     
+    states=["a) Non-seizure", "b) Pre-ictal", "c) Ictal"]
+    for idx, s in enumerate(states):
+        X = Xs[idx]
+        Y = Ys[idx]
+        Xhat_My, Yhat_Mx = [], [] # correlation list
+        for L in L_range: 
+            ccm_XY = ccm(X, Y, taus[idx], Es[idx], L) # define new ccm object # Testing for X -> Y
+            ccm_YX = ccm(Y, X, taus[idx], Es[idx], L) # define new ccm object # Testing for Y -> X    
+            Xhat_My.append(ccm_XY.causality()[0]) 
+            Yhat_Mx.append(ccm_YX.causality()[0]) 
+    
+        axs[idx].plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
+        axs[idx].plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
+        axs[idx].set_title(f"{s} state E{Es[idx]}_tau{taus[idx]}")
+        axs[idx].set_xlabel('L', size=12)
+        axs[idx].set_ylabel('correl', size=12)
+        axs[idx].legend()
     # plot convergence as L->inf. Convergence is necessary to conclude causality
-    plt.figure(figsize=(5,5))
-    plt.plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
-    plt.plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
-    plt.xlabel('L', size=12)
-    plt.ylabel('correl', size=12)
-    plt.legend(prop={'size': 16})    
-    plt.savefig(filename)
+    fig.suptitle(Title)
+    plt.tight_layout()
+    plt.savefig(filename+".png")
     plt.close()
 
-def compute_ccm_over_window(limit_channels, X_c, output_filename):
-    # Stores all correlations
-    Xhat_My_f = []
-    Yhat_Mx_f = []
+# Find the overall optimal L through convergence analysis
+def plot_overall_convergence(output_filename, L_range, E_range, tau_range):
+    print("### Convergence Analysis ###")
+    
+    # Load all causality matrices with different parameter sets
+    X = np.load(output_filename+'.npz')
+    plt.figure(figsize=(14,10))
+    
+    # Style X->Y and Y->X differently to preserve directionality
+    style_X_Y = dict(linestyle='-',   marker='o', markersize=4, linewidth=1.5)
+    style_Y_X = dict(linestyle='--',  marker='s', markersize=4, linewidth=1.5)
+            
+    for E in E_range:
+        for tau in tau_range:            
+            # Correlation list
+            Xhat_My, Yhat_Mx = [], []
+            
+            # Compute mean causality score of matrix across L values
+            for L in L_range:
+                data = X[f'L{L}_E{E}_tau{tau}']
+                corrX_Y = np.mean(data[np.triu_indices_from(data, k=1)])
+                corrY_X  = np.mean(data[np.tril_indices_from(data, k=-1)])
+                Xhat_My.append(corrX_Y)
+                Yhat_Mx.append(corrY_X)
+            
+            # Plot the mean causality values across L values
+            plt.plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$'+f'_E{E}_tau{tau}', **style_X_Y)
+            plt.plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$'+f'_E{E}_tau{tau}', **style_Y_X)
+            print('plot done for E={E}, tau={tau}')
+    
+    # Plot the complete figure for causality score across library length L
+    plt.title('Convergence analysis of causality values')
+    plt.xlabel('Library length (L)', size=12)
+    plt.ylabel('Causality values', size=12)
+    plt.legend(prop={'size': 6}, loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=2)
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.savefig(output_filename+f'_overall-convergence.png', bbox_inches='tight')
+    plt.close()
 
+# Find the tau for the first zero crossing in autocorrelation function
+def first_zero_crossing(auto_corr_vals, tau_range):
+    
+    # Locate among values
+    for i in range(1, len(auto_corr_vals)):
+        isPrevPos = auto_corr_vals[i-1] > 0
+        isAfterNeg = auto_corr_vals[i] <= 0
+        
+        # Discover first zero crossing
+        if isPrevPos and isAfterNeg:
+            return tau_range[i]
+    
+    # Discover no zero crossing
+    return None
+
+# Find the overall optimal tau through autocorrelation
+def plot_autocorrelation(output_filename, L, E_range, tau_range):
+    print("### Autocorrelation ###")
+    
+    # Load all causality matrices with different parameter sets
+    X = np.load(output_filename+'.npz')
+    plt.figure(figsize=(9,5))
+    
+    # Style X->Y and Y->X differently to preserve directionality
+    style_X_Y = dict(linestyle='-',   marker='o', markersize=4, linewidth=1.5)
+    style_Y_X = dict(linestyle='--',  marker='s', markersize=4, linewidth=1.5)
+    
+    # All potential optimal tau values from autocorrelation plots
+    opt_taus=[]
+    
+    for E in E_range:
+        # Correlation list
+        Xhat_My, Yhat_Mx = [], []
+        
+        # Compute mean causality score of matrix across tau values
+        for tau in tau_range:                
+            data = X[f'L{L}_E{E}_tau{tau}']
+            corrX_Y = np.mean(data[np.triu_indices_from(data, k=1)])
+            corrY_X  = np.mean(data[np.tril_indices_from(data, k=-1)])
+            Xhat_My.append(corrX_Y)
+            Yhat_Mx.append(corrY_X)
+        
+        # Compute autocorrelation values for different time lag (tau)
+        auto_corrX_Y = acf(Xhat_My, nlags=len(Xhat_My)-1)
+        auto_corrY_X = acf(Yhat_Mx, nlags=len(Yhat_Mx)-1)
+        
+        # Plot the auto correlation values across tau values
+        plt.plot(tau_range, auto_corrX_Y, label='$\hat{X}(t)|M_y$'+f'_L{L}_E{E}', **style_X_Y)
+        plt.plot(tau_range, auto_corrY_X, label='$\hat{Y}(t)|M_x$'+f'_L{L}_E{E}', **style_Y_X)
+        print(f'plot done for E={E}')
+        
+        # Find optimal tau through first zero crossing
+        opt_tauX_Y = first_zero_crossing(auto_corrX_Y, tau_range)
+        opt_tauY_X = first_zero_crossing(auto_corrY_X, tau_range)
+        opt_taus.append(opt_tauX_Y)
+        opt_taus.append(opt_tauY_X)
+        print(f"Optimal taus: X->Y {opt_tauX_Y} and Y->X {opt_tauY_X}")
+    
+    # Select overall tau as the most frequently occurring tau value during zero crossing
+    counter = Counter(opt_taus)
+    overall_tau = counter.most_common(1)[0][0]
+    print(f"Overall optimal tau: {overall_tau}")
+    plt.figtext(0.1, 0.01, f"Overall optimal tau: {overall_tau}", ha='left', va='bottom', fontsize=8)
+    
+    # Plot the complete figure for autocorrelation
+    plt.title('Autocorrelation of causality values')
+    plt.xticks(tau_range)
+    plt.xlabel('Time lag (tau)')
+    plt.ylabel('Autocorrelation')
+    plt.legend(prop={'size': 16}, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    plt.tight_layout()
+    plt.savefig(output_filename+f'_autocorrelation.png', bbox_inches='tight')
+    plt.close()
+    
+    return overall_tau
+
+# Find the overall optimal E through simplex projection
+def plot_simplex(output_filename, limit_channels, L, tau, E_range, X):
+    print("### Simplex Projection ###")
+    
+    plt.figure(figsize=(9,5))
+    
+    # All potential optimal E values from simplex projection
+    opt_Es = []
+    
+    # Perform simplex projection for each channel
+    for idx, i in enumerate(limit_channels):
+        
+        # The data points of ith channel
+        df = pd.DataFrame({
+            # "Time": np.concatenate((np.arange(start_index, end_index),np.concatenate((np.arange(0, start_index), np.arange(end_index, X.shape[1]))))),
+            # f"Ch{i}": np.concatenate((X[i, start_index:end_index], np.concatenate((X[i, :start_index], X[i, end_index:]))))
+            "Time": np.arange(end_index-start_index),
+            f"Ch{i}": X[i, start_index:end_index]
+        })
+        
+        # All correlation values from simplex projection
+        simplex_vals = []
+        
+        for E in E_range:
+            
+            # Compute Simplex projection
+            res = pyEDM.Simplex(
+                dataFrame=df,
+                lib=f'1 {L}',                                         # Train embedding with L data points
+                pred=f'{L+1} {L*2 if L*2<=end_index-start_index else end_index-start_index}', # Test predictions with remaining data points OLD: if L*2<=end_index-start_index else end_index-start_index
+                tau=tau,                                              # Fixed tau
+                E=E,                                                  
+                Tp=1,                                                 # Prediction Horizon
+                columns=f'Ch{i}',                                     # Data points for library
+                target=f'Ch{i}',                                      # Data points for prediction
+                showPlot=False
+            )
+            
+            # Create a mask for finite numbers to ensure infs and NaNs are filtered out
+            o_val = np.array(res['Observations'])
+            p_val = np.array(res['Predictions'])
+            mask = np.isfinite(p_val) & np.isfinite(o_val)
+            masked_o = o_val[mask]
+            masked_p = p_val[mask]
+            
+            # Correlation between masked observation and predictions
+            simplex_corr, _ = pearsonr(masked_o, masked_p)
+            
+            # Final simplex value for E is the mean of the correlations
+            simplex_vals.append(simplex_corr.mean())
+        
+        # Plot the correlation values of simplex projection across E values for ith channel
+        plt.plot(E_range, simplex_vals, marker='o', label=f'Ch{i}')
+        
+        # Find the E with highest prediction skill
+        opt_E = E_range[np.argmax(simplex_vals)]
+        print(f"Optimal E: {opt_E} for Channel {i}")
+        opt_Es.append(opt_E)
+        
+    # Select the most frequently occuring value of E
+    counter = Counter(opt_Es)
+    overall_E = counter.most_common(1)[0][0]       
+    print(f"Overall optimal E: {overall_E}")
+    plt.figtext(0.1, 0.01, f"Overall optimal E: {overall_E}", ha='left', va='bottom', fontsize=8)
+    
+    # Plot the estimated Es for all channels
+    plt.xlabel('Embedding dimension (E)')
+    plt.ylabel('Prediction skill (correl)')
+    plt.title('Simplex Projection')
+    plt.legend(prop={'size': 16}, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(output_filename+"_overall-simplex-projection.png", bbox_inches='tight')
+    
+    return overall_E
+
+# NOT IN USE: Compute CCM over sliding window
+def compute_ccm_over_window(limit_channels, X_c, output_filename):
     start_time = time.perf_counter()
     
     step_size, window_size = 50000, 50000
@@ -311,12 +506,9 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
         # Reading channels of control file
         for idx, i in enumerate(limit_channels[:-1]):
             X0 = X_c[i, start:start + window_size]
-            Xhat_My1 = []
-            Yhat_Mx1 = []
             
             for jdx, j in enumerate(limit_channels[idx+1:], start=idx+1):
                 Y0 = X_c[j, start:start + window_size]
-                Xhat_My, Yhat_Mx = [], []
                 
                 # plot_convergence(filename+"-convergence", X0, Y0)            
                 
@@ -329,19 +521,6 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
                 
                 ccm_correls[idx, jdx] = ccm_XY_corr # X -> Y over triangle
                 ccm_correls[jdx, idx] = ccm_YX_corr # Y -> X under triangle
-                
-                # Xhat_My.append(ccm_XY_corr)
-                # Yhat_Mx.append(ccm_YX_corr)
-                
-                # print("PLOTTING")
-                # ccm_XY.plot_ccm_correls()
-                # ccm_YX.plot_ccm_correls()
-                
-            # Xhat_My1.append(Xhat_My)
-            # Yhat_Mx1.append(Yhat_Mx)
-            
-        # Xhat_My_f.append(Xhat_My1)
-        # Yhat_Mx_f.append(Yhat_Mx1)
         
         plot_heatmap(ccm_correls,  f"{output_filename}/{start}-{start+window_size}-ccm_heatmap.png", limit_channels)
         print(f"Done with {output_filename} for {start}-{start+window_size}")
@@ -351,36 +530,46 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
     execution_time = end_time - start_time
     print(f"Execution Time: {execution_time:.5f} seconds")
 
+# Combine multiple files into a continous file for a subject
 def combine_samples(subject, patient_files):
     tot_len = 0
+    max_N = 0
     
-    # Compute the total length of seizures
+    # Compute the total length of patient files
     for filename in patient_files:        
+        
         with np.load(os.path.join(proc_data_dir, subject, filename), mmap_mode='r') as X_p:
+            # Add each length
             tot_len += X_p['arr'].shape[1]
-    
-    # Combined time series matrix of seizures
-    X_ps = np.zeros((23, tot_len))
+            
+            # Update maximum number of channels
+            if X_p['arr'].shape[0] > max_N:
+                max_N = X_p['arr'].shape[0]
+                
+    # Combined time series matrix of samples
+    X_ps = np.zeros((max_N, tot_len))
     curr_len = 0
     
-    # Combine the time series of seizure samples
+    # Combine the time series of data samples
     for filename in patient_files:
         print(f"Combining patient file: {filename}")
 
-        # Load seizure data
+        # Load data sample
         X_p = np.load(os.path.join(proc_data_dir, subject, filename))['arr']
         
-        # Add seizure data
-        X_ps[:, curr_len:curr_len+X_p.shape[1]] = X_p
+        # Add data
+        X_ps[:X_p.shape[0]:, curr_len:curr_len+X_p.shape[1]] = X_p
         curr_len+=X_p.shape[1]
+    
     return X_ps, tot_len
 
-def compute_ccm(limit_channels, output_filename, X, L, E, tau):
+# Compute ccm on selected channels
+def compute_ccm(limit_channels, X, L, E, tau):
     start_time = time.perf_counter()
     print(f"The L: {L}")
     print(f"The E: {E}")
     print(f"The tau: {tau}")
-    print(f"The signal length ends at: {end_index}")
+    print(f"Starts: {start_index} and Ends: {end_index}")
         
     #Variable Initialization
     Xhat_My_f = []
@@ -390,9 +579,9 @@ def compute_ccm(limit_channels, output_filename, X, L, E, tau):
     #Reading channels
     for idx, i in enumerate(limit_channels[:-1]):
         Xhat_My, Yhat_Mx = [], []
-        X0 = X[i,start_index:end_index]
+        X0 = X[i-1,start_index:end_index]
         for jdx, j in enumerate(limit_channels[idx+1:], start=idx+1):
-            Y0=X[j,start_index:end_index]
+            Y0=X[j-1,start_index:end_index]
             
             #Applying CCM to channel pair 
             ccm_XY = ccm(X0, Y0, tau, E, L) # define new ccm object # Testing for X -> Y
@@ -421,9 +610,11 @@ def compute_ccm(limit_channels, output_filename, X, L, E, tau):
         
     end_time = time.perf_counter()
     return ccm_correls
-    
+
+# Save ccm results
 def compute_across_params(L_range, E_range, tau_range, output_filename, limit_channels, X):
     if os.path.exists(output_filename+'.npz'):
+        print("Hellos")
         print(f"Already exists {output_filename}")
         # Old param values
         data = dict(np.load(output_filename+'.npz', allow_pickle=True))
@@ -432,32 +623,33 @@ def compute_across_params(L_range, E_range, tau_range, output_filename, limit_ch
         for L in L_range:
                 for E in E_range:
                     for tau in tau_range:
-                        data.update({f'L{L}_E{E}_tau{tau}':compute_ccm(limit_channels,output_filename, X, L, E, tau)})
+                        data.update({f'L{L}_E{E}_tau{tau}':compute_ccm(limit_channels, X, L, E, tau)})
         
         np.savez(output_filename, **data)
         print(f"Done updating {output_filename}")
     else:
         all_matrix = {}
-        if len(X[0,:]) >= start_index + end_index:
+        if len(X[0,:]) >= end_index - start_index:
             for L in L_range:
                 for E in E_range:
                     for tau in tau_range:
                         # Compute ccm on control file
-                        all_matrix[f'L{L}_E{E}_tau{tau}'] = compute_ccm(limit_channels,output_filename, X, L, E, tau)
-        
+                        all_matrix[f'L{L}_E{E}_tau{tau}']  = compute_ccm(limit_channels, X, L, E, tau)
             np.savez_compressed(output_filename, **all_matrix)
             print(f"Done creating {output_filename}")
 
+# Compute ccm results for all states for each subject
 def ccm_subject(subject, proc_data_dir, output_dir):
     
+    # Start processing subject
     print(f"Starting subject {subject}")
     subject_dir = Path(proc_data_dir + "/" + subject)
-    limit_channels = [1, 4, 5, 7, 8, 9, 12, 13, 18, 21]
     
-    # Selected controle fil
-    control_file = os.path.join(subject_dir, "control-data.npz")
+    # Limit channels for parameter testing
+    limit_channels = [2, 4, 6, 7]
     
     # Selected patient files
+    control_file = os.path.join(subject_dir, "control-data.npz")
     patient_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="ictal"]
     patient_pre_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="pre"]
     
@@ -468,43 +660,90 @@ def ccm_subject(subject, proc_data_dir, output_dir):
     output_filename_ic = output_dir_subj + '/patient-ictal-file'
     output_filename_pre = output_dir_subj + '/patient-pre-ictal-file'
     
-    # Load non-seizure data
+    # Load control data
     X_c = np.load(os.path.join(proc_data_dir, subject, "nonses", control_file))['arr']
-    
-    # OLD: Testing convergence on control file for one channel pair
-    # OLD: plot_convergence(output_filename_c+f"-small-Ch({ch1,ch2})-convergence", X_c[ch1], X_c[ch2])
-    
-    # Length is limited by max sample size
-    global end_index
-    end_index = start_index + X_c.shape[1]//2
     
     # Parameters range
     L_range = [6000, 7000, 8000, 9000, 10000]
-    E_range = [2,3]
-    tau_range=[1,2]
+    E_range = [2,3, 4, 5]
+    tau_range=[1,2, 3, 4, 5, 6, 7, 8, 9, 10]
     
-    # STEP 1: Compute ccm on control file across params
-    compute_across_params(L_range, E_range, tau_range,output_filename_c, limit_channels, X_c)
+    # Observed optimal parameter values (L, E, tau) = (10 000, 4, 4)
+    opt_L = L_range[4]
+    opt_tau = tau_range[3]
+    opt_E = E_range[2]
     
-    X_ic, ic_len = combine_samples(subject, patient_ictal_files)
-    X_pre, pre_len = combine_samples(subject, patient_pre_ictal_files)
+    # Length decides amount of datapoints in the window
+    global end_index
+    global start_index
         
-    # Compute the ccm on conjoined patient ictal file
-    end_index = start_index + ic_len//2
-    # OLD: compute_ccm(limit_channels,output_filename_ic, X_ic)
+    # Tune CCM parameters for subject chb01 on control data
+    if(subject == "chb01"):
+                
+        # 1. Compute ccm on control file across params
+        start_index = X_c.shape[1]//2
+        end_index = X_c.shape[1] - 1
+        compute_across_params(L_range, E_range, tau_range,output_filename_c+"_parameter-testing", limit_channels, X_c)
+        
+        # 2. Plot overall convergence of control file to decide L
+        plot_overall_convergence(output_filename_c+"_parameter-testing", L_range, E_range, tau_range)
+        opt_L = L_range[4]      # Observed from convergence plot
+        
+        # 3. Plot autocorrelation of control file to decide tau
+        opt_tau=plot_autocorrelation(output_filename_c+"_parameter-testing", opt_L, E_range, tau_range)
+        
+        # 4. Plot simplex projection of control file to decide E
+        opt_E=plot_simplex(output_filename_c+"_parameter-testing", limit_channels, opt_L, opt_tau, E_range, X_c)
+        
+    # 5. Individual convergence checks for each state for a single channel pair
+    if not os.path.exists(output_dir_subj+"/test-convergences.png"):
+        Xs, Ys = [], []         # Channel data for each state
+        opt_Es = [4, 4, 4]      # Different Es: [4, 3, 3]
+        opt_taus = [4, 4, 4]    # Different taus: [4, 5, 5]
+        i, j = 1, 2
+        
+        # Extract channel i and j data from control data
+        start_index= random.randint(opt_L, X_c.shape[1] - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_c[i, start_index:end_index])
+        Ys.append(X_c[j, start_index:end_index])
+        
+        # Extract channel i and j data from preictal data
+        X_pre, pre_len = combine_samples(subject, patient_pre_ictal_files)
+        start_index= random.randint(opt_L, pre_len - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_pre[i, start_index:end_index])
+        Ys.append(X_pre[j, start_index:end_index])
+        
+        # Extract channel i and j data from ictal data
+        X_ic, ic_len = combine_samples(subject, patient_ictal_files)
+        start_index= random.randint(opt_L, ic_len - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_ic[i, start_index:end_index])
+        Ys.append(X_ic[j, start_index:end_index])
+        
+        # Plot convergence check
+        plot_convergence(f"Convergence for Ch({i}, {j})", output_dir_subj+"/test-convergences", L_range, opt_Es, opt_taus, Xs, Ys)
     
-    # STEP 4: Compute ccm on ictal file across params
-    compute_across_params([L_range[4]], E_range, tau_range,output_filename_ic, limit_channels, X_ic)
+    # 6. Compute ccm on control file for the fixed parameter set
+    start_index= random.randint(opt_L, X_c.shape[1] - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_c, [i for i in range(1, 24)], X_c)
     
-    # Compute the ccm on conjoined patient pre ictal file
-    end_index = start_index + pre_len // 2
-    # OLD: compute_ccm(limit_channels,output_filename_pre, X_pre)
+    # 7. Compute ccm on ictal files for the fixed parameter set
+    X_ic, ic_len = combine_samples(subject, patient_ictal_files)
+    start_index= random.randint(opt_L, ic_len - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_ic, [i for i in range(1, 24)], X_ic)
     
-    # STEP 5: Compute ccm on pre ictal file across params
-    compute_across_params([L_range[4]], E_range, tau_range,output_filename_pre, limit_channels, X_pre)  
-    
-    # OLD: test over window
-    # OLD: compute_ccm_over_window(limit_channels, X_ps, output_dir_subj)
+    # 8. Compute ccm on preictal files for the fixed parameter set
+    X_pre, pre_len = combine_samples(subject, patient_pre_ictal_files)
+    start_index= random.randint(opt_L, pre_len - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_pre, [i for i in range(1, 24)], X_pre)
+                
+    # Test over window
+    # OLD: compute_ccm_over_window(limit_channels, X_c, output_dir_subj)
 
 # CCM Parameters
 np.random.seed(1)
@@ -526,13 +765,17 @@ proc_data_dir = os.path.join(parent_dir, 'processed_data')
 output_dir = os.path.join(parent_dir, 'output_data')
 os.makedirs(output_dir, exist_ok=True)
 
-list_subjects = [f"chb{str(i).zfill(2)}" for i in range(1, 25)]
+# list_subjects = [f"chb{str(i).zfill(2)}" for i in [1, 2, 3,4, 5, 6, 8, 9, 10, 23]]
+list_subjects = [f"chb{str(i).zfill(2)}" for i in [1, 2, 3,4, 5, 6, 8, 9, 10, 23]]
 num_cores = mp.cpu_count()
 args_list = [(subject, proc_data_dir, output_dir) for subject in list_subjects]
 
-ccm_subject("chb01", proc_data_dir, output_dir)
+# ccm_subject("chb01", proc_data_dir, output_dir)
+
+for subject in list_subjects:
+    ccm_subject(subject, proc_data_dir, output_dir)
+
+# ccm_subject("chb03", proc_data_dir, output_dir)
 
 # pool = mp.Pool(8)
 # results = pool.starmap(ccm_subject,args_list)
-# pool.close()
-# pool.join()
