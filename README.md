@@ -9,7 +9,6 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 - [Abstract](#-abstract)
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
-- [Installation](#-installation)
 - [Usage](#-usage)
 - [Thesis Document](#-thesis-document)
 
@@ -29,10 +28,6 @@ root/
 ## ✅ Prerequisites
 
 <!-- List of tools, libraries, versions -->
-
-## ⚙️ Installation
-
-<!-- Steps to clone, set up environment, install dependencies -->
 
 ## 🚀 Usage
 
