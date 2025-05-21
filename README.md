@@ -44,6 +44,14 @@ Run the scripts in this order:
    ```bash
    python src/preprocess_data.py
    ```
+2. **Compute CCM on subjects**  
+   ```bash
+   python src/process_CCM_subjects.py
+   ```
+3. **Evaluate CCM results of all subjects**  
+   ```bash
+   python src/eval_CCM_subjects.py
+   ```
 
 
 ## 📘 Thesis Document
