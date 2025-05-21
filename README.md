@@ -1,5 +1,5 @@
 # Epileptic Seizure Analysis: Asymmetries in Causality using Convergent Cross Mapping
-_[Degree Type] Thesis in [Field]_
+_Degree Project in Computer Science and Engineering, First cycle, 15 credits_
 
 ## 📄 Abstract
 
