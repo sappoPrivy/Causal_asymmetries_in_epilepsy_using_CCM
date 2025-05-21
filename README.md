@@ -65,5 +65,5 @@ Run the scripts in this order:
 
 
 ## 📘 Thesis Document
-[📄 Read the Thesis](docs/thesis.pdf)
+[📄 Read the Thesis](docs/Thesis.pdf)
 
