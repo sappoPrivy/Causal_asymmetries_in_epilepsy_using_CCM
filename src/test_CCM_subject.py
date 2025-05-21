@@ -274,26 +274,30 @@ class ccm:
 ######## END CCM CODE #########
 
 # Test convergence for a single channel pair
-def plot_convergence(filename, L_range, X, Y):
-    L_range = range(6000, 8000, 200) # L values to test
-    tau = 1
-    E = 2
-
-    Xhat_My, Yhat_Mx = [], [] # correlation list
-    for L in L_range: 
-        ccm_XY = ccm(X, Y, tau, E, L) # define new ccm object # Testing for X -> Y
-        ccm_YX = ccm(Y, X, tau, E, L) # define new ccm object # Testing for Y -> X    
-        Xhat_My.append(ccm_XY.causality()[0]) 
-        Yhat_Mx.append(ccm_YX.causality()[0]) 
+def plot_convergence(Title, filename, L_range, Es, taus, Xs, Ys):
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     
+    states=["a) Non-seizure", "b) Pre-ictal", "c) Ictal"]
+    for idx, s in enumerate(states):
+        X = Xs[idx]
+        Y = Ys[idx]
+        Xhat_My, Yhat_Mx = [], [] # correlation list
+        for L in L_range: 
+            ccm_XY = ccm(X, Y, taus[idx], Es[idx], L) # define new ccm object # Testing for X -> Y
+            ccm_YX = ccm(Y, X, taus[idx], Es[idx], L) # define new ccm object # Testing for Y -> X    
+            Xhat_My.append(ccm_XY.causality()[0]) 
+            Yhat_Mx.append(ccm_YX.causality()[0]) 
+    
+        axs[idx].plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
+        axs[idx].plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
+        axs[idx].set_title(f"{s} state E{Es[idx]}_tau{taus[idx]}")
+        axs[idx].set_xlabel('L', size=12)
+        axs[idx].set_ylabel('correl', size=12)
+        axs[idx].legend()
     # plot convergence as L->inf. Convergence is necessary to conclude causality
-    plt.figure(figsize=(5,5))
-    plt.plot(L_range, Xhat_My, label='$\hat{X}(t)|M_y$')
-    plt.plot(L_range, Yhat_Mx, label='$\hat{Y}(t)|M_x$')
-    plt.xlabel('L', size=12)
-    plt.ylabel('correl', size=12)
-    plt.legend(prop={'size': 16})    
-    plt.savefig(filename)
+    fig.suptitle(Title)
+    plt.tight_layout()
+    plt.savefig(filename+".png")
     plt.close()
 
 # Find the overall optimal L through convergence analysis
@@ -425,8 +429,10 @@ def plot_simplex(output_filename, limit_channels, L, tau, E_range, X):
         
         # The data points of ith channel
         df = pd.DataFrame({
+            # "Time": np.concatenate((np.arange(start_index, end_index),np.concatenate((np.arange(0, start_index), np.arange(end_index, X.shape[1]))))),
+            # f"Ch{i}": np.concatenate((X[i, start_index:end_index], np.concatenate((X[i, :start_index], X[i, end_index:]))))
             "Time": np.arange(end_index-start_index),
-            f"Ch{i}": X[i,start_index:end_index]
+            f"Ch{i}": X[i, start_index:end_index]
         })
         
         # All correlation values from simplex projection
@@ -438,7 +444,7 @@ def plot_simplex(output_filename, limit_channels, L, tau, E_range, X):
             res = pyEDM.Simplex(
                 dataFrame=df,
                 lib=f'1 {L}',                                         # Train embedding with L data points
-                pred=f'{L+1} {L*2 if L*2<=end_index else end_index}', # Test predictions with remaining data points
+                pred=f'{L+1} {L*2 if L*2<=end_index-start_index else end_index-start_index}', # Test predictions with remaining data points OLD: if L*2<=end_index-start_index else end_index-start_index
                 tau=tau,                                              # Fixed tau
                 E=E,                                                  
                 Tp=1,                                                 # Prediction Horizon
@@ -471,7 +477,7 @@ def plot_simplex(output_filename, limit_channels, L, tau, E_range, X):
     # Select the most frequently occuring value of E
     counter = Counter(opt_Es)
     overall_E = counter.most_common(1)[0][0]       
-    print(f"Overall optimal E: {opt_E}")
+    print(f"Overall optimal E: {overall_E}")
     plt.figtext(0.1, 0.01, f"Overall optimal E: {overall_E}", ha='left', va='bottom', fontsize=8)
     
     # Plot the estimated Es for all channels
@@ -502,39 +508,38 @@ def plot_heatmap(L, E, tau, output_filename, limit_channels, type):
     # Plot the causality matrix as a heatmap
     plt.title(f'{type} correls heatmaps for L{L}_E{E}_tau{tau}', fontsize=16)
     plt.tight_layout(rect=[0, 0, 0.9, 1])
-    plt.savefig(output_filename+f'-heatmaps.png')
+    plt.savefig(output_filename+f'-heatmap.png')
     plt.close()
 
 # Plot heatmaps for multiple causality matrices
-def plot_heatmaps(L, E_range, tau_range, output_filename, limit_channels, C, type):
+def plot_heatmaps(output_subj_dir, L, E, tau, output_filenames, limit_channels):
     
-    # Load all causality matrices
-    X = np.load(output_filename+'.npz')
-    
-    # Create a grid of plots for different (E, tau)
-    nrows = len(E_range)
-    ncols = len(tau_range)    
-    fig, axes = plt.subplots(nrows, ncols, figsize=(len(limit_channels)*ncols, len(limit_channels)*nrows))
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
     channel_arr = [f"Ch{i}" for i in limit_channels]
-    cbar_ax = fig.add_axes([0.92, 0.3, 0.02, 0.4])
+    states=["a) Non-seizure", "b) Pre-ictal", "c) Ictal"]
     
-    for i, E in enumerate(E_range):
-        for j, tau in enumerate(tau_range):
+    for idx, (s, output_filename) in enumerate(zip(states, output_filenames)):
+        # Load all causality matrices
+        X = np.load(output_filename+'.npz')
+        
+        # Current causality matrix
+        data = X[f'L{L}_E{E}_tau{tau}']
             
-            # Current causality matrix
-            data = X[f'L{L}_E{E}_tau{tau}']
+        # Heatmap of the causality matrix
+        sns.heatmap(data, annot=False, cmap="coolwarm", square=True,vmin=0,vmax=1,xticklabels=channel_arr, yticklabels=channel_arr, ax=axs[idx], cbar=False)
             
-            # Heatmap of the causality matrix
-            sns.heatmap(data, annot=True, cmap="coolwarm", square=True,vmin=0,vmax=1,xticklabels=channel_arr, yticklabels=channel_arr, ax=axes[i][j], cbar=(i == 0 and j == 0), cbar_ax=cbar_ax if (i==0 and j==0) else None)
-            
-            # Add title of this sub plot
-            axes[i][j].set_title(f'L = {L} E={E}, τ={tau}')
-            
-    fig.suptitle(f'{type} correls heatmaps', fontsize=16)
+        axs[idx].set_title(f"{s} state")
+    
+    cbar_ax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
+    cbar = fig.colorbar(axs[2].get_children()[0], cax=cbar_ax)
+    cbar.set_label('Causality', fontsize=12)
+    
+    fig.suptitle(f'Causality heatmaps with L{L}_E{E}_tau{tau}', fontsize=16)
     plt.tight_layout(rect=[0, 0, 0.9, 1])
-    plt.savefig(output_filename+f'-heatmaps.png')
+    plt.savefig(output_subj_dir+f"/{output_subj_dir.split('/')[-1]}-causality-heatmaps.png")
     plt.close()
- 
+
+# SCRAPS
 def plot_boxplots(control_file, ictal_file, pre_ictal_file, subject_dir, L, E_range, tau_range):
     X_c = np.load(control_file+'.npz')
     X_ic = np.load(ictal_file+'.npz')
@@ -564,6 +569,7 @@ def plot_boxplots(control_file, ictal_file, pre_ictal_file, subject_dir, L, E_ra
     plt.savefig(subject_dir+ f'/correl-distribution-boxplots.png')
     plt.close()
 
+# SCRAPS
 def plot_boxplot(control_file, ictal_file, pre_ictal_file, subject_dir, L, E, tau):
     X_c = np.load(control_file+'.npz')
     X_ic = np.load(ictal_file+'.npz')
@@ -586,11 +592,8 @@ def plot_boxplot(control_file, ictal_file, pre_ictal_file, subject_dir, L, E, ta
     plt.savefig(subject_dir+ f'/correl-distribution-boxplot.png')
     plt.close()
 
+# NOT IN USE: Compute CCM over sliding window
 def compute_ccm_over_window(limit_channels, X_c, output_filename):
-    # Stores all correlations
-    Xhat_My_f = []
-    Yhat_Mx_f = []
-
     start_time = time.perf_counter()
     
     step_size, window_size = 50000, 50000
@@ -604,12 +607,9 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
         # Reading channels of control file
         for idx, i in enumerate(limit_channels[:-1]):
             X0 = X_c[i, start:start + window_size]
-            Xhat_My1 = []
-            Yhat_Mx1 = []
             
             for jdx, j in enumerate(limit_channels[idx+1:], start=idx+1):
                 Y0 = X_c[j, start:start + window_size]
-                Xhat_My, Yhat_Mx = [], []
                 
                 # plot_convergence(filename+"-convergence", X0, Y0)            
                 
@@ -622,19 +622,6 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
                 
                 ccm_correls[idx, jdx] = ccm_XY_corr # X -> Y over triangle
                 ccm_correls[jdx, idx] = ccm_YX_corr # Y -> X under triangle
-                
-                # Xhat_My.append(ccm_XY_corr)
-                # Yhat_Mx.append(ccm_YX_corr)
-                
-                # print("PLOTTING")
-                # ccm_XY.plot_ccm_correls()
-                # ccm_YX.plot_ccm_correls()
-                
-            # Xhat_My1.append(Xhat_My)
-            # Yhat_Mx1.append(Yhat_Mx)
-            
-        # Xhat_My_f.append(Xhat_My1)
-        # Yhat_Mx_f.append(Yhat_Mx1)
         
         plot_heatmap(ccm_correls,  f"{output_filename}/{start}-{start+window_size}-ccm_heatmap.png", limit_channels)
         print(f"Done with {output_filename} for {start}-{start+window_size}")
@@ -644,109 +631,338 @@ def compute_ccm_over_window(limit_channels, X_c, output_filename):
     execution_time = end_time - start_time
     print(f"Execution Time: {execution_time:.5f} seconds")
 
+# Combine multiple files into a continous file for a subject
 def combine_samples(subject, patient_files):
     tot_len = 0
+    max_N = 0
     
-    # Compute the total length of seizures
+    # Compute the total length of patient files
     for filename in patient_files:        
+        
         with np.load(os.path.join(proc_data_dir, subject, filename), mmap_mode='r') as X_p:
+            # Add each length
             tot_len += X_p['arr'].shape[1]
-    
-    # Combined time series matrix of seizures
-    X_ps = np.zeros((23, tot_len))
+            
+            # Update maximum number of channels
+            if X_p['arr'].shape[0] > max_N:
+                max_N = X_p['arr'].shape[0]
+                
+    # Combined time series matrix of samples
+    X_ps = np.zeros((max_N, tot_len))
     curr_len = 0
     
-    # Combine the time series of seizure samples
+    # Combine the time series of data samples
     for filename in patient_files:
         print(f"Combining patient file: {filename}")
 
-        # Load seizure data
+        # Load data sample
         X_p = np.load(os.path.join(proc_data_dir, subject, filename))['arr']
         
-        # Add seizure data
-        X_ps[:, curr_len:curr_len+X_p.shape[1]] = X_p
+        # Add data
+        X_ps[:X_p.shape[0]:, curr_len:curr_len+X_p.shape[1]] = X_p
         curr_len+=X_p.shape[1]
+    
     return X_ps, tot_len
 
+# FIX: Plot distribution of asymmetry index values as boxplot
+def plot_boxplot_asymm(asymm_idx_subjects, output_dir, L, E, tau):
+    
+    plt.figure(figsize=(10, 8))
+    
+    # Load the asymmetry index from the list of dictionaries
+    c = np.array([dict['control'] for dict in asymm_idx_subjects])
+    pre = np.array([dict['preictal'] for dict in asymm_idx_subjects])
+    ic = np.array([dict['ictal'] for dict in asymm_idx_subjects])
+    mx = [c, pre, ic]
+    
+    # Plot the distribution
+    plt.boxplot(mx, labels=["Control", "Pre-ictal", "Ictal"], showfliers=False)
+    plt.ylabel('Asymmetry Index')
+    
+    # Customize spacing between groups and color
+    xs = []
+    colors = plt.cm.tab10.colors
+
+    # Add x with spacings
+    for idx, group in enumerate(mx, start=1):
+        x = np.random.normal(loc=idx, scale=0.05, size=len(group))
+        xs.append(x)
+    
+    # Plot for each subject
+    for i in range(len(mx[0])):
+        
+        # All x points across states
+        x_s = [xs[group_idx][i] for group_idx in range(3)]
+        
+        # All asymmetry index value for same subject across states
+        y_s = [mx[group_idx][i] for group_idx in range(3)]
+        
+        # Choose unique color
+        color = colors[i % len(colors)]
+        
+        # Plot the points and corresponding lines between
+        plt.plot(x_s, y_s, 'o', color=color, alpha=1, markersize=8)
+        plt.plot(x_s, y_s, color=color,linestyle='-', alpha=0.7, linewidth=2)
+    
+    # Statistics text under figure
+    ymin, _ = plt.ylim()
+    text_y = ymin - 0.07 * (plt.ylim()[1] - ymin)
+
+    # Add statistics under each group
+    for idx, group in enumerate(mx, start=1):
+        mean = np.mean(group)
+        sd = np.std(group)
+        median = np.median(group)
+        iqr = np.percentile(group, 75) - np.percentile(group, 25)
+        text=(f"Mean={mean:.2f}\nMedian={median:.2f}\nIQR={iqr:.2f}\nSD={sd:.2f}")
+        plt.text(idx, text_y, text, ha='center', va='top', fontsize=10)
+
+    plt.title(f'Asymmetry Index Distributions L{L}_E{E}_tau{tau}', fontsize=16)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig(output_dir+ f'/Overall-asymmetry-index-distribution.png')
+    plt.close()
+
+# Compute asymmetry index for each causality matrix in the different states
 def compute_asymm_idx(subject, output_filenames, L, E, tau):
     
-    # rows = []
+    # List of asymmetry index values
     asymm_idxs=[]
+    
+    # Compute asymm idx for each state
+    for output_filename in output_filenames:
+        
+        # Load causality matrix
+        X = np.load(output_filename+'.npz')
+        data = X[f'L{L}_E{E}_tau{tau}']
+        
+        # Calculate asymm index for the causality matrix
+        asymm_idx = np.linalg.norm(data - data.T, 'fro')
+        asymm_idxs.append(asymm_idx)
+        print(f'Done computing asymmetry index for {output_filename}\n')
+    
+    # Dictionary of asymmetry index values for all state
+    asymm_row = {'subject_id': subject, 'control': asymm_idxs[0], 'preictal': asymm_idxs[1], 'ictal': asymm_idxs[2]}
+    print(f'Done computing asymmetry index for patient specific files {subject}\n')
+    return asymm_row
+
+# SCRAPS
+def compute_pair_asymm_format(subject, output_filenames, L, E, tau):
+
+    max_asymm_pair_states=[]    
+    for output_filename in output_filenames:
+        X = np.load(output_filename+'.npz')
+        data = X[f'L{L}_E{E}_tau{tau}']
+        asymm_pairs_list = []
+        for i in range(data.shape[0]-1):
+            for j in range(i+1, data.shape[0]):
+                corr_X_Y = data[i,j]
+                corr_Y_X = data[j,i]
+                asymm = np.abs(corr_X_Y-corr_Y_X)
+                asymm_pairs_list.append({'key': f'{i+1}, {j+1}', 'value': asymm})
+        max_asymm_pair = sorted(asymm_pairs_list, key=lambda x: x['value'], reverse=True)[0]
+        print(max_asymm_pair)
+        max_asymm_pair_states.append(f"Ch({max_asymm_pair['key']}): {round(max_asymm_pair['value'], 3)}")
+        print(f'Done computing asymmetry pairs for {output_filename}\n')
+    
+    asymm_row={'subject_id': subject, 'control': max_asymm_pair_states[0], 'preictal': max_asymm_pair_states[1], 'ictal': max_asymm_pair_states[2]}
+    print(f'Done computing asymmetry pairs for patient specific files {subject}\n')
+    return asymm_row
+
+# Identify the top_N channels with the higher asymmetry value for each state
+def compute_ch_asymm(subject, output_filenames, L, E, tau, top_N, format=False):
+
+    # List of channels with max asymmetry for each state
+    max_asymm_ch_states=[]    
+    
+    # Find highest asymmetry for each state
+    for output_filename in output_filenames:
+        
+        # Load causality matrix
+        X = np.load(output_filename+'.npz')
+        data = X[f'L{L}_E{E}_tau{tau}']
+        
+        # List of channels and corresponding asymmetry value
+        asymm_ch_list = []
+        for i in range(data.shape[0]-1):
+            
+            # Total causal outflow
+            outF = np.sum(data[i,:])
+            
+            # Total causal inflow
+            inF = np.sum(data[:,i])
+            
+            # Asymmetry value is quantified with the difference between outflow and inflow
+            asymm = np.abs(outF-inF)
+            asymm_ch_list.append({'key': f'{i+1}', 'value': asymm})
+        
+        # Get top N channel and value pair with highest asymmetry value
+        max_asymm_ch = sorted(asymm_ch_list, key=lambda x: x['value'], reverse=True)[:top_N]
+        
+        # Select this dominant channel for the state
+        if format and top_N==1:
+            max_asymm_ch_states.append(f"Ch({max_asymm_ch[0]['key']}): {round(max_asymm_ch[0]['value'], 3)}")
+            print(max_asymm_ch)
+            print(f'Done computing asymmetry channel for {output_filename}\n')
+        else:
+            max_asymm_ch_states.append(max_asymm_ch)
+            print(max_asymm_ch_states)
+            print(f'Done computing {top_N} asymmetry channel for {output_filename}\n')
+    
+    # Dictionary of the total dominant asymmetric channels for each state
+    asymm_row={'subject_id': subject, 'control': max_asymm_ch_states[0], 'preictal': max_asymm_ch_states[1], 'ictal': max_asymm_ch_states[2]}
+    print(f'Done finding dominant asymmetric channel for patient specific files {subject}\n')
+    return asymm_row
+
+# SCRAPS
+def compute_pair_asymm(subject, output_filenames, L, E, tau):
+    
+    # rows = []
+    max_asymm_pair_states=[]
     
     for output_filename in output_filenames:
         X = np.load(output_filename+'.npz')
         data = X[f'L{L}_E{E}_tau{tau}']
-        asymm_idx = np.linalg.norm(data - data.T, 'fro')
-        # rows.append({'Type': output_filename.split("/")[-1] ,'asymm_idx': asymm_idx})
-        asymm_idxs.append(asymm_idx)
-        print(f'Done computing asymmetry index for {output_filename}\n')
-                
+        asymm_pairs_list = []
+        for i in range(data.shape[0]-1):
+            for j in range(i+1, data.shape[0]):
+                corr_X_Y = data[i,j]
+                corr_Y_X = data[j,i]
+                asymm = np.abs(corr_X_Y-corr_Y_X)
+                asymm_pairs_list.append({'key': f'{i+1}, {j+1}', 'value': asymm})
+        max_asymm_pair = sorted(asymm_pairs_list, key=lambda x: x['value'], reverse=True)[:3]
+        # max(asymm_pairs_list, key=lambda x: x['value'])]
+        # max_asymm_pair = [d['key'] for d in sorted(asymm_pairs_list, key=lambda x: x['value'], reverse=True)[:3]]
+        print(max_asymm_pair)
+        max_asymm_pair_states.append(max_asymm_pair)
+        print(f'Done computing asymmetry pairs for {output_filename}\n')
+    
     # df = pd.DataFrame(rows)
     # with open(f'{output_filename}-asymm.md', 'w') as f:
     #     f.write(df.to_markdown(index=False))
     # df.to_csv(f'{output_dir_subj}/asymmetry-indices.csv')
-    
-    asymm_row = {'subject_id': subject, 'interictal': asymm_idxs[0], 'preictal': asymm_idxs[1], 'ictal': asymm_idxs[2]}
-    print(f'Done computing asymmetry index for patient specific files {subject}\n')
+    asymm_row=[]
+    for i in range(np.array(max_asymm_pair_states).shape[1]):
+        asymm_row.append({'subject_id': subject, 'control': max_asymm_pair_states[0][i], 'preictal': max_asymm_pair_states[1][i], 'ictal': max_asymm_pair_states[2][i]})
+    # asymm_row={'subject_id': subject, 'control': max_asymm_pair_states[0], 'preictal': max_asymm_pair_states[1], 'ictal': max_asymm_pair_states[2]}
+    print(f'Done computing asymmetry pairs for patient specific files {subject}\n')
     return asymm_row
 
-def compute_metrics(output_filename, C, L, E_range, tau_range):
-    X = np.load(output_filename+'.npz')
-    rows = []
+# SCRAPS
+def plot_frequency_asymm_pair(asymm_pairs_subjects, output_dir, L, E, tau):
     
-    for E in E_range:
-        for tau in tau_range:
-            data = X[f'L{L}_E{E}_tau{tau}']
-            diff = data - C
-            # num_links = np.sum(diff>0)
-            # var = np.var(data)
-            # asymm_idx = np.linalg.norm(data - data.T, 'fro') / np.linalg.norm(data, 'fro')
-            asymm_idx = np.linalg.norm(data - data.T, 'fro')
-            # rows.append({'L': L, 'E': E, 'tau': tau, 'num_links': num_links, 'variance': var, 'asymm_idx': asymm_idx})
-            rows.append({'L': L, 'E': E, 'tau': tau,'asymm_idx': asymm_idx})
+    fig, axs = plt.subplots(1, 3, figsize=(15, 6))  # 1 row, 3 columns
+    # states_top_3 = []
+    
+    # Create horisontal bar chart of frequency for channel pair for each state
+    for idx, state in enumerate(['control', 'preictal', 'ictal']):
+        state_pairs = np.array([dict[state] for dict in asymm_pairs_subjects])
+        freq_pairs = []
+        
+        # Compute the frequency of the channel pair
+        for pair in state_pairs:
+            i = pair['key'].split(', ')[0]
+            j = pair['key'].split(', ')[1]
+            asymm_value = pair['value']
+            exist = False
             
-    df = pd.DataFrame(rows)
-    with open(f'{output_filename}-metrics.md', 'w') as f:
-        f.write(df.to_markdown(index=False))
-    print(f'Done computing metrics for {output_filename}\n')
-
-def compute_high_outflow(output_dir_subj, output_filenames, L, E, tau, limit_channels):
-    
-    outflow_row = []
-    for i in range(len(limit_channels)):
+            # Check if the pair is already registered
+            for p in freq_pairs:
+                if p['pair'] == f'{i}, {j}' or p['pair'] == f'{j}, {i}':
+                    p['freq'] += 1
+                    p['sum'] += asymm_value
+                    exist = True
+                    break
+                
+            # Register the channel pair the first time
+            if not exist:
+                freq_pairs.append({'pair': i+", "+j, 'freq': 1,'sum': asymm_value})
         
-        outflows = []
+        # Compute the top 3 most frequently occuring channel pair
+        top_3 = sorted(freq_pairs, key=lambda x: x['freq'], reverse=True)[:3]
+        # states_top_3.append({'state': state, 'top3': top_3})
         
-        for output_filename in output_filenames:
-            X = np.load(output_filename+'.npz')
-            data = X[f'L{L}_E{E}_tau{tau}']
-            outflows.append(np.sum((data[i, :])))
-
-        outflow_row.append({'channel': limit_channels[i], 'interictal': outflows[0], 'preictal': outflows[1], 'ictal': outflows[2]})
+        # Plot the subplot for the state
+        y = np.array([dict['pair'] for dict in top_3])
+        x = np.array([dict['freq'] for dict in top_3])
+        bars=axs[idx].barh(y, x, color='skyblue')
+        axs[idx].set_xlabel('Frequency')
+        axs[idx].set_title(f'{state.capitalize()} state')
+        axs[idx].set_yticks(np.arange(len(y)))
+        axs[idx].set_yticklabels(y)
+        
+        for bar, pair_data in zip(bars, top_3):
+            mean_asymm = pair_data['sum'] / pair_data['freq']
+            axs[idx].text(bar.get_width() *0.5, bar.get_y() + bar.get_height()/2,
+                        f'{mean_asymm:.2f}', va='center', fontsize=9)
     
-    df = pd.DataFrame(outflow_row)
-    df.to_csv(f'{output_dir_subj}/causal-outflows.csv')
-    print(f' Outflow L{L}_E{E}_tau{tau} for {output_dir_subj}\n')
+    fig.suptitle(f'Frequency of highest asymmetry channel pair for L{L}_E{E}_tau{tau}', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(output_dir+ f'/Overall-asymmetry-pairs-freqs.png')
+    plt.close()
 
-def compute_reference_matrix(output_filename, L, E_range, tau_range, limit_channels):
-    X = np.load(output_filename+'.npz')
-    sum_mx = np.zeros((len(limit_channels), len(limit_channels)))
-    num_mx = 0
-    for E in E_range:
-        for tau in tau_range:
-            num_mx += 1
-            data = X[f'L{L}_E{E}_tau{tau}']
-            sum_mx += data
-    mean_mx = sum_mx / num_mx
-    plot_heatmap(mean_mx, output_filename+"-reference_matrix.png", limit_channels, 'Inter-ictal reference correls heatmap')
-    return mean_mx   
+# Plot the top 3 frequent dominant asymmetric channels for each state
+def plot_frequency_asymm_ch(asymm_subjects, output_dir, L, E, tau):
+    
+    fig, axs = plt.subplots(1, 3, figsize=(15, 6))  # 1 row, 3 columns
+    
+    # Create horisontal bar chart of frequency for channel pair for each state
+    for idx, state in enumerate(['control', 'preictal', 'ictal']):
+        
+        # Get the channels with highest asymmetry for that state
+        # state_dom_ch = np.array([dict[state] for dict in asymm_subjects])
+        state_dom_ch = np.array([in_dict for o_dict in asymm_subjects for in_dict in o_dict[state]])
+        freq_dom_ch = []
+        print(state_dom_ch)
+        
+        # Compute the frequency of the channel pair
+        for pair in state_dom_ch:
+            print(type(pair))
+            ch = pair['key']
+            asymm_value = pair['value']
+            exist = False
+            
+            # Check if the pair is already registered
+            for p in freq_dom_ch:
+                if p['ch'] == f'{ch}':
+                    p['freq'] += 1
+                    p['sum'] += asymm_value
+                    exist = True
+                    break
+                
+            # Register the channel pair the first time
+            if not exist:
+                freq_dom_ch.append({'ch': f'{ch}', 'freq': 1,'sum': asymm_value})
+        
+        # Compute the top 3 most frequently occuring channels
+        top_3 = sorted(freq_dom_ch, key=lambda x: x['freq'], reverse=True)[:3]
+        
+        y = np.array([dict['ch'] for dict in top_3])
+        x = np.array([dict['freq'] for dict in top_3])
+        
+        # Plot the horisontal bar charts for the state
+        bars=axs[idx].barh(y, x, color='skyblue')
+        axs[idx].set_xlabel('Frequency')
+        axs[idx].set_title(f'{state.capitalize()} state')
+        axs[idx].set_yticks(np.arange(len(y)))
+        axs[idx].set_yticklabels(y)
+        
+        # Display the mean value for individual bar chart
+        for bar, pair_data in zip(bars, top_3):
+            mean_asymm = pair_data['sum'] / pair_data['freq']
+            axs[idx].text(bar.get_width() *0.5, bar.get_y() + bar.get_height()/2, f'{mean_asymm:.2f}', va='center', fontsize=9)
+    
+    fig.suptitle(f'Frequency of highest asymmetry channel for L{L}_E{E}_tau{tau}', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(output_dir+ f'/Overall-asymmetry-channel-freqs.png')
+    plt.close()
 
-def compute_ccm(limit_channels, output_filename, X, L, E, tau):
+# Compute ccm on selected channels
+def compute_ccm(limit_channels, X, L, E, tau):
     start_time = time.perf_counter()
     print(f"The L: {L}")
     print(f"The E: {E}")
     print(f"The tau: {tau}")
-    print(f"The signal length ends at: {end_index}")
+    print(f"Starts: {start_index} and Ends: {end_index}")
         
     #Variable Initialization
     Xhat_My_f = []
@@ -756,9 +972,9 @@ def compute_ccm(limit_channels, output_filename, X, L, E, tau):
     #Reading channels
     for idx, i in enumerate(limit_channels[:-1]):
         Xhat_My, Yhat_Mx = [], []
-        X0 = X[i,start_index:end_index]
+        X0 = X[i-1,start_index:end_index]
         for jdx, j in enumerate(limit_channels[idx+1:], start=idx+1):
-            Y0=X[j,start_index:end_index]
+            Y0=X[j-1,start_index:end_index]
             
             #Applying CCM to channel pair 
             ccm_XY = ccm(X0, Y0, tau, E, L) # define new ccm object # Testing for X -> Y
@@ -787,9 +1003,11 @@ def compute_ccm(limit_channels, output_filename, X, L, E, tau):
         
     end_time = time.perf_counter()
     return ccm_correls
-    
+
+# Save ccm results
 def compute_across_params(L_range, E_range, tau_range, output_filename, limit_channels, X):
     if os.path.exists(output_filename+'.npz'):
+        print("Hellos")
         print(f"Already exists {output_filename}")
         # Old param values
         data = dict(np.load(output_filename+'.npz', allow_pickle=True))
@@ -798,32 +1016,33 @@ def compute_across_params(L_range, E_range, tau_range, output_filename, limit_ch
         for L in L_range:
                 for E in E_range:
                     for tau in tau_range:
-                        data.update({f'L{L}_E{E}_tau{tau}':compute_ccm(limit_channels,output_filename, X, L, E, tau)})
+                        data.update({f'L{L}_E{E}_tau{tau}':compute_ccm(limit_channels, X, L, E, tau)})
         
         np.savez(output_filename, **data)
         print(f"Done updating {output_filename}")
     else:
         all_matrix = {}
-        if len(X[0,:]) >= start_index + end_index:
+        if len(X[0,:]) >= end_index - start_index:
             for L in L_range:
                 for E in E_range:
                     for tau in tau_range:
                         # Compute ccm on control file
-                        all_matrix[f'L{L}_E{E}_tau{tau}'] = compute_ccm(limit_channels,output_filename, X, L, E, tau)
-        
+                        all_matrix[f'L{L}_E{E}_tau{tau}']  = compute_ccm(limit_channels, X, L, E, tau)
             np.savez_compressed(output_filename, **all_matrix)
             print(f"Done creating {output_filename}")
 
+# Compute ccm results for all states for each subject
 def ccm_subject(subject, proc_data_dir, output_dir):
     
+    # Start processing subject
     print(f"Starting subject {subject}")
     subject_dir = Path(proc_data_dir + "/" + subject)
-    limit_channels = [1, 4, 5, 7, 8, 9, 12, 13, 18, 21]
     
-    # Selected control fil
-    control_file = os.path.join(subject_dir, "control-data.npz")
+    # Limit channels for parameter testing
+    limit_channels = [2, 4, 6, 7]
     
     # Selected patient files
+    control_file = os.path.join(subject_dir, "control-data.npz")
     patient_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="ictal"]
     patient_pre_ictal_files = [f for f in os.listdir(subject_dir) if os.path.isfile(os.path.join(subject_dir, f)) and f.split("-")[0]=="pre"]
     
@@ -834,98 +1053,93 @@ def ccm_subject(subject, proc_data_dir, output_dir):
     output_filename_ic = output_dir_subj + '/patient-ictal-file'
     output_filename_pre = output_dir_subj + '/patient-pre-ictal-file'
     
-    # Load non-seizure data
+    # Load control data
     X_c = np.load(os.path.join(proc_data_dir, subject, "nonses", control_file))['arr']
     
-    # Length is limited by max sample size
-    global end_index
-    
     # Parameters range
     L_range = [6000, 7000, 8000, 9000, 10000]
     E_range = [2,3, 4, 5]
     tau_range=[1,2, 3, 4, 5, 6, 7, 8, 9, 10]
     
-    # Observed optimal parameter values 
+    # Observed optimal parameter values (L, E, tau) = (10 000, 4, 4)
     opt_L = L_range[4]
     opt_tau = tau_range[3]
     opt_E = E_range[2]
     
-    # Tune CCM parameters for subject chb01
+    # Length decides amount of datapoints in the window
+    global end_index
+    global start_index
+        
+    # Tune CCM parameters for subject chb01 on control data
     if(subject == "chb01"):
+                
+        # 1. Compute ccm on control file across params
+        start_index = X_c.shape[1]//2
+        end_index = X_c.shape[1] - 1
+        compute_across_params(L_range, E_range, tau_range,output_filename_c+"_parameter-testing", limit_channels, X_c)
         
-        # STEP 1: Compute ccm on control file across params
-        end_index = start_index + X_c.shape[1]//2
-        # compute_across_params(L_range, E_range, tau_range,output_filename_c, limit_channels, X_c)
-        
-        # STEP 2: Plot overall convergence of control file to decide L
-        # plot_overall_convergence(output_filename_c, L_range, E_range, tau_range)
+        # 2. Plot overall convergence of control file to decide L
+        plot_overall_convergence(output_filename_c+"_parameter-testing", L_range, E_range, tau_range)
         opt_L = L_range[4]      # Observed from convergence plot
         
-        # STEP 3: Plot autocorrelation of control file to decide tau
-        # opt_tau = plot_autocorrelation(output_filename_c, opt_L, E_range, tau_range)
+        # 3. Plot autocorrelation of control file to decide tau
+        opt_tau=plot_autocorrelation(output_filename_c+"_parameter-testing", opt_L, E_range, tau_range)
         
-        # STEP 4: Plot simplex projection of control file to decide E
-        # opt_E = plot_simplex(output_filename_c, limit_channels, opt_L, opt_tau, E_range, X_c)
+        # 4. Plot simplex projection of control file to decide E
+        opt_E=plot_simplex(output_filename_c+"_parameter-testing", limit_channels, opt_L, opt_tau, E_range, X_c)
         
-        # Parameter tuning yields (L, E, tau) = (10 000, 4, 4)
+    # 5. Individual convergence checks for each state for a single channel pair
+    if not os.path.exists(output_dir_subj+"/test-convergences.png"):
+        Xs, Ys = [], []         # Channel data for each state
+        opt_Es = [4, 4, 4]      # Different Es: [4, 3, 3]
+        opt_taus = [4, 4, 4]    # Different taus: [4, 5, 5]
+        i, j = 1, 2
         
-        # STEP 5: Compute ccm on patient ictal and pre-ictal files for the fixed parameter set
-        X_ic, ic_len = combine_samples(subject, patient_ictal_files)
+        # Extract channel i and j data from control data
+        start_index= random.randint(opt_L, X_c.shape[1] - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_c[i, start_index:end_index])
+        Ys.append(X_c[j, start_index:end_index])
+        
+        # Extract channel i and j data from preictal data
         X_pre, pre_len = combine_samples(subject, patient_pre_ictal_files)
+        start_index= random.randint(opt_L, pre_len - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_pre[i, start_index:end_index])
+        Ys.append(X_pre[j, start_index:end_index])
         
-        # Compute ccm on ictal file across params
-        end_index = start_index + ic_len//2
-        compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_ic, limit_channels, X_ic)
+        # Extract channel i and j data from ictal data
+        X_ic, ic_len = combine_samples(subject, patient_ictal_files)
+        start_index= random.randint(opt_L, ic_len - opt_L - 1)
+        end_index = start_index + opt_L
+        Xs.append(X_ic[i, start_index:end_index])
+        Ys.append(X_ic[j, start_index:end_index])
         
-        # Compute ccm on pre ictal file across params
-        end_index = start_index + pre_len // 2   
-        compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_pre, limit_channels, X_pre)
+        # Plot convergence check
+        plot_convergence(f"Convergence for Ch({i}, {j})", output_dir_subj+"/test-convergences", L_range, opt_Es, opt_taus, Xs, Ys)
     
-    else:                
-        # Compute ccm on inter ictal file
-        end_index = start_index + X_c.shape[1]//2
-        compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_c, limit_channels, X_c)
+    # 6. Compute ccm on control file for the fixed parameter set
+    start_index= random.randint(opt_L, X_c.shape[1] - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_c, [i for i in range(1, 24)], X_c)
     
-    # STEP 5: Compute ccm on patient specific files for the fixed parameter set
+    # 7. Compute ccm on ictal files for the fixed parameter set
     X_ic, ic_len = combine_samples(subject, patient_ictal_files)
+    start_index= random.randint(opt_L, ic_len - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_ic, [i for i in range(1, 24)], X_ic)
+    
+    # 8. Compute ccm on preictal files for the fixed parameter set
     X_pre, pre_len = combine_samples(subject, patient_pre_ictal_files)
-    
-    # Compute ccm on ictal file
-    end_index = start_index + ic_len//2
-    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_ic, limit_channels, X_ic)
-    
-    # Compute ccm on pre ictal file
-    end_index = start_index + pre_len // 2   
-    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_pre, limit_channels, X_pre)
-    
-    # STEP 6: Plot heatmaps of causality matrices for the patient-specific files
-    # OLD: plot_heatmaps(L_range[4], E_range, tau_range, output_filename_c, limit_channels, ref_mx, 'Inter-ictal')
-    # OLD: plot_heatmaps(L_range[4], E_range, tau_range, output_filename_pre, limit_channels, ref_mx, 'Pre-ictal')
-    # OLD: plot_heatmaps(L_range[4], E_range, tau_range, output_filename_ic, limit_channels, ref_mx, 'Ictal')  
-    plot_heatmap(opt_L, opt_E, opt_tau, output_filename_c, limit_channels, 'Inter-ictal') 
-    plot_heatmap(opt_L, opt_E, opt_tau, output_filename_pre, limit_channels, 'Pre-ictal')
-    plot_heatmap(opt_L, opt_E, opt_tau, output_filename_ic, limit_channels, 'Ictal')
-    
-    # STEP 7: Compute metrics of causality matrix with fixed params for the patient-specific files
-    # compute_metrics(output_filename_ic, ref_mx, L_range[4], E_range, tau_range)
-    # compute_metrics(output_filename_pre, ref_mx, L_range[4], E_range, tau_range)
-    # compute_metrics(output_filename_c, ref_mx, L_range[4], E_range, tau_range)
-    # compute_asymm_idx(subject, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau)
-    
-    # STEP 8: Compute outflow for channels for fixed parameters
-    # compute_high_outflow(output_filename_c, L_range[4], E_range[1], tau_range[1], limit_channels)
-    # compute_high_outflow(output_filename_ic, L_range[4], E_range[1], tau_range[1], limit_channels)
-    # compute_high_outflow(output_filename_pre, L_range[4], E_range[1], tau_range[1], limit_channels)
-    
-    # STEP 9: Box plots across states for each parameter set
-    # plot_boxplots(output_filename_c, output_filename_ic, output_filename_pre, output_dir_subj, L_range[4], E_range, tau_range)
-            
-    # OLD: test over window
-    # OLD: compute_ccm_over_window(limit_channels, X_ps, output_dir_subj)
+    start_index= random.randint(opt_L, pre_len - opt_L - 1)
+    end_index = start_index + opt_L
+    compute_across_params([opt_L], [opt_E],[opt_tau],output_filename_pre, [i for i in range(1, 24)], X_pre)
+                
+    # Test over window
+    # OLD: compute_ccm_over_window(limit_channels, X_c, output_dir_subj)
 
+# Evaluate all subjects
 def eval_subjects(subjects):
-    
-    limit_channels = [1, 4, 5, 7, 8, 9, 12, 13, 18, 21]
     
     # Parameters range
     L_range = [6000, 7000, 8000, 9000, 10000]
@@ -937,7 +1151,10 @@ def eval_subjects(subjects):
     opt_tau = tau_range[3]
     opt_E = E_range[2]
     
-    asymm_subject = {}
+    # Lists of asymmetry indices and dominant channels
+    asymm_idx_subjects = []
+    asymm_ch_highest = []
+    asymm_ch_highest_sub = []
     
     for subject in subjects:
         
@@ -948,15 +1165,32 @@ def eval_subjects(subjects):
         output_filename_ic = output_dir_subj + '/patient-ictal-file'
         output_filename_pre = output_dir_subj + '/patient-pre-ictal-file'
         
-        asymm_subject.append(compute_asymm_idx(subject, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau))
-        compute_high_outflow(output_dir_subj, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau, limit_channels)
-        plot_boxplot(output_filename_c, output_filename_ic, output_filename_pre, output_dir_subj, opt_L, opt_E, opt_tau)
+        # Plot heatmaps of each causality matrix corresponding to each state
+        plot_heatmaps(output_dir_subj, opt_L, opt_E, opt_tau, [output_filename_c, output_filename_pre, output_filename_ic], [i for i in range(1, 24)])
         
-        # Compute frequency of top 3 of each state
+        # Compute asymmetry index for each subject
+        asymm_idx_subjects.append(compute_asymm_idx(subject, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau))
         
-    df = pd.DataFrame(asymm_subject)
+        # Identify only the highest asymmetric channel in each state
+        asymm_ch_highest.append(compute_ch_asymm(subject, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau, 1, True))
+        
+        # Identify the top N highest asymmetric channel in each state
+        asymm_ch_highest_sub.append(compute_ch_asymm(subject, [output_filename_c, output_filename_pre, output_filename_ic], opt_L, opt_E, opt_tau, 1, False))
+    
+    # Table of the asymmetry indices for all subjects
+    df = pd.DataFrame(asymm_idx_subjects)
     df.to_excel(f'{output_dir}/Overall-asymmetry-index.xlsx')
-        
+    
+    # Table of the dominant asymmetric channels for all subjects
+    df2 = pd.DataFrame(asymm_ch_highest)
+    df2.to_excel(f'{output_dir}/Overall-asymmetry-channels.xlsx')
+    
+    # Plot distribution of asymmetry indices across all subjects
+    plot_boxplot_asymm(asymm_idx_subjects, output_dir, opt_L, opt_E, opt_tau)
+    
+    # Plot frequency of dominant asymmetric channels across all subjects
+    plot_frequency_asymm_ch(asymm_ch_highest_sub, output_dir, opt_L, opt_E, opt_tau)
+    
 
 # CCM Parameters
 np.random.seed(1)
@@ -978,11 +1212,19 @@ proc_data_dir = os.path.join(parent_dir, 'processed_data')
 output_dir = os.path.join(parent_dir, 'output_data')
 os.makedirs(output_dir, exist_ok=True)
 
-list_subjects = [f"chb{str(i).zfill(2)}" for i in range(2, 25)]
+# list_subjects = [f"chb{str(i).zfill(2)}" for i in [1, 2, 3,4, 5, 6, 8, 9, 10, 23]]
+list_subjects = [f"chb{str(i).zfill(2)}" for i in [1, 2, 3,4, 5, 6, 8, 9, 10, 23]]
 num_cores = mp.cpu_count()
 args_list = [(subject, proc_data_dir, output_dir) for subject in list_subjects]
 
 # ccm_subject("chb01", proc_data_dir, output_dir)
 
-pool = mp.Pool(8)
-results = pool.starmap(ccm_subject,args_list)
+eval_subjects(list_subjects)
+
+# for subject in list_subjects:
+#     ccm_subject(subject, proc_data_dir, output_dir)
+
+# ccm_subject("chb03", proc_data_dir, output_dir)
+
+# pool = mp.Pool(8)
+# results = pool.starmap(ccm_subject,args_list)
