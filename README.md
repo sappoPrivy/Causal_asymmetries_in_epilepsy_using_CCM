@@ -18,11 +18,9 @@ root/
 ├── src/
 │ ├── preprocess_data.py
 │ ├── process_CCM_subjects.py
-│ ├── file2.ext
-│ └── file3.ext
+│ └── eval_CCM_subjects.py
 ├── docs/
 │ ├── thesis.pdf
-│ ├── research-notes.md
 │ └── references.bib
 ├── README.md
 └── .gitignore
@@ -40,6 +38,5 @@ root/
 <!-- Commands or steps to run the project/demo -->
 
 ## 📘 Thesis Document
-
-<!-- Link or instructions to open thesis.pdf -->
+[📄 Read the Thesis](docs/thesis.pdf)
 
