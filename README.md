@@ -32,6 +32,14 @@ root/
   ```bash
   pip install numpy scipy pandas matplotlib
   ```
+**CCM code**  
+- Download Python juypiter version from [here](https://phdinds-aim.github.io/time_series_handbook/06_ConvergentCrossMappingandSugiharaCausality/ccm_sugihara.html#introduction)
+
+**pyEDM**
+- Download pyEDM (install via pip):
+  ```bash
+  pip install pyEDM
+  ```
 
 ## 🚀 Usage
 
