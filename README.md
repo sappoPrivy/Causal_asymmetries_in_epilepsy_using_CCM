@@ -1,4 +1,4 @@
-# [Thesis Title]  
+# Epileptic Seizure Analysis: Asymmetries in Causality using Convergent Cross Mapping
 _[Degree Type] Thesis in [Field]_
 
 ## 📄 Abstract
