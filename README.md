@@ -27,7 +27,11 @@ root/
 
 ## ✅ Prerequisites
 
-<!-- List of tools, libraries, versions -->
+**Python 3.7+**  
+- Required Python packages (install via pip):  
+  ```bash
+  pip install numpy scipy pandas matplotlib
+  ```
 
 ## 🚀 Usage
 
