@@ -26,7 +26,7 @@ root/
 │   └── references.bib
 ├── README.md
 └── .gitignore
-
+```
 
 ## ✅ Prerequisites
 
@@ -38,7 +38,13 @@ root/
 
 ## 🚀 Usage
 
-<!-- Commands or steps to run the project/demo -->
+Run the scripts in this order:
+
+1. **Preprocess data**  
+   ```bash
+   python src/preprocess_data.py
+   ```
+
 
 ## 📘 Thesis Document
 [📄 Read the Thesis](docs/thesis.pdf)
