@@ -74,7 +74,7 @@ def plot_heatmaps(output_subj_dir, L, E, tau, output_filenames, limit_channels):
     plt.savefig(output_subj_dir+f"/{output_subj_dir.split('/')[-1]}-causality-heatmaps.png")
     plt.close()
 
-# FIX: Plot distribution of asymmetry index values as boxplot
+# Plot distribution of asymmetry index values as boxplot
 def plot_boxplot_asymm(asymm_idx_subjects, output_dir, L, E, tau):
     
     plt.figure(figsize=(10, 8))
@@ -89,41 +89,43 @@ def plot_boxplot_asymm(asymm_idx_subjects, output_dir, L, E, tau):
     plt.boxplot(mx, labels=["Control", "Pre-ictal", "Ictal"], showfliers=False)
     plt.ylabel('Asymmetry Index')
     
-    # Customize spacing between groups and color
+    # Customize spacing in and between groups
     xs = []
+    
+    # 10 unique colors
     colors = plt.cm.tab10.colors
 
     # Add x with spacings
-    for idx, group in enumerate(mx, start=1):
-        x = np.random.normal(loc=idx, scale=0.05, size=len(group))
+    for idx, state in enumerate(mx, start=1):
+        x = np.random.normal(loc=idx, scale=0.05, size=len(state))
         xs.append(x)
     
     # Plot for each subject
     for i in range(len(mx[0])):
         
         # All x points across states
-        x_s = [xs[group_idx][i] for group_idx in range(3)]
+        x_s = [xs[idx][i] for idx in range(3)]
         
         # All asymmetry index value for same subject across states
-        y_s = [mx[group_idx][i] for group_idx in range(3)]
+        y_s = [mx[idx][i] for idx in range(3)]
         
-        # Choose unique color
-        color = colors[i % len(colors)]
+        # Choose unique color within each cycle of 10 subjects
+        unique_color = colors[i % len(colors)]
         
         # Plot the points and corresponding lines between
-        plt.plot(x_s, y_s, 'o', color=color, alpha=1, markersize=8)
-        plt.plot(x_s, y_s, color=color,linestyle='-', alpha=0.7, linewidth=2)
+        plt.plot(x_s, y_s, 'o', color=unique_color, alpha=1, markersize=8)
+        plt.plot(x_s, y_s, color=unique_color, linestyle='-', alpha=0.7, linewidth=2)
     
     # Statistics text under figure
     ymin, _ = plt.ylim()
     text_y = ymin - 0.07 * (plt.ylim()[1] - ymin)
 
-    # Add statistics under each group
-    for idx, group in enumerate(mx, start=1):
-        mean = np.mean(group)
-        sd = np.std(group)
-        median = np.median(group)
-        iqr = np.percentile(group, 75) - np.percentile(group, 25)
+    # Add statistics under each state
+    for idx, state in enumerate(mx, start=1):
+        mean = np.mean(state)
+        sd = np.std(state)
+        median = np.median(state)
+        iqr = np.percentile(state, 75) - np.percentile(state, 25)
         text=(f"Mean={mean:.2f}\nMedian={median:.2f}\nIQR={iqr:.2f}\nSD={sd:.2f}")
         plt.text(idx, text_y, text, ha='center', va='top', fontsize=10)
 
