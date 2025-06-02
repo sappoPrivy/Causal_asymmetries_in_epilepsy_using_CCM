@@ -21,8 +21,7 @@ root/
 │   ├── process_CCM_subjects.py  
 │   └── eval_CCM_subjects.py  
 ├── docs/  
-│   ├── thesis.pdf  
-│   └── references.bib  
+│   └── Thesis.pdf  
 ├── data/    
 ├── README.md  
 └── .gitignore  
