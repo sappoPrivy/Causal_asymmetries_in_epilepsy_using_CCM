@@ -8,15 +8,11 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 ## 🗂️ Table of Contents
 
 - [Abstract](#-abstract)
-- [Key Findings](#-key-findings)
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Usage](#-usage)
 - [Thesis Document](#-thesis-document)
-
-## 📄 Key Findings
-![Overall-asymmetry-index-distribution](docs/Overall-asymmetry-index-distribution.png)
-![Overall-asymmetry-channel-freqs](docs/Overall-asymmetry-channel-freqs.png)
+- [Key Findings](#-key-findings)
 
 ## 🏗️ Project Structure
 
@@ -71,3 +67,6 @@ Run the scripts in this order:
 ## 📘 Thesis Document
 [📄 Read the Thesis](docs/Thesis.pdf)
 
+## 📄 Key Findings
+![Overall-asymmetry-index-distribution](docs/Overall-asymmetry-index-distribution.png)
+![Overall-asymmetry-channel-freqs](docs/Overall-asymmetry-channel-freqs.png)
