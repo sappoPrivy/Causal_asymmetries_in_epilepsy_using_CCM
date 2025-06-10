@@ -11,7 +11,6 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Usage](#-usage)
-- [Thesis Document](#-thesis-document)
 - [Key Findings](#-key-findings)
 
 ## 🏗️ Project Structure
@@ -63,10 +62,7 @@ Run the scripts in this order:
    python src/eval_CCM_subjects.py
    ```
 
-
-## 📘 Thesis Document
+## 📘 Key Findings
 [📄 Read the Thesis](docs/Thesis.pdf)
-
-## 📄 Key Findings
 ![Overall-asymmetry-index-distribution](docs/Overall-asymmetry-index-distribution.png)
 ![Overall-asymmetry-channel-freqs](docs/Overall-asymmetry-channel-freqs.png)
