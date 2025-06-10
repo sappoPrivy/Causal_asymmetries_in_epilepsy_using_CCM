@@ -13,6 +13,9 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 - [Usage](#-usage)
 - [Thesis Document](#-thesis-document)
 
+## 📄 Key Findings
+![Overall-asymmetry-index-distribution](docs/Overall-asymmetry-index-distribution.png)
+
 ## 🏗️ Project Structure
 
 root/  
