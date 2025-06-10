@@ -8,6 +8,7 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 ## 🗂️ Table of Contents
 
 - [Abstract](#-abstract)
+- [Key Findings](#-key-findings)
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Usage](#-usage)
@@ -15,6 +16,7 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 
 ## 📄 Key Findings
 ![Overall-asymmetry-index-distribution](docs/Overall-asymmetry-index-distribution.png)
+![Overall-asymmetry-channel-freqs](docs/Overall-asymmetry-channel-freqs.png)
 
 ## 🏗️ Project Structure
 
