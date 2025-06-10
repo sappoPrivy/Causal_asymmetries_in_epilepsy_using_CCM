@@ -65,9 +65,9 @@ Run the scripts in this order:
 ## 📘 Key Findings
 [📄 Read the Thesis](docs/Thesis.pdf)
 <p align="center">
-  <img src="docs/Overall-asymmetry-index-distribution.png" alt="Overall Asymmetry Index Distribution" width="400"/>
+  <img src="docs/Overall-asymmetry-index-distribution.png" alt="Overall Asymmetry Index Distribution" width="50%"/>
 </p>
 
 <p align="center">
-  <img src="docs/Overall-asymmetry-channel-freqs.png" alt="Overall Asymmetry Channel Frequencies" width="400"/>
+  <img src="docs/Overall-asymmetry-channel-freqs.png" alt="Overall Asymmetry Channel Frequencies" width="50%"/>
 </p>
