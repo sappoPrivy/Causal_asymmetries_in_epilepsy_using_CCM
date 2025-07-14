@@ -16,13 +16,9 @@ Exploring brain connectivity is essential to gain a deeper understanding of epil
 ## 🏗️ Project Structure
 
 root/  
-├── src/  
-│   ├── preprocess_data.py  
-│   ├── process_CCM_subjects.py  
-│   └── eval_CCM_subjects.py  
-├── docs/  
-│   └── Thesis.pdf  
-├── data/    
+├── src/  # Python scripts for preprocessing, computing and evaluating ccm scores  
+├── docs/  # Documentations such as the thesis report and select few generated illustrations  
+├── data/  # CHB-MIT dataset is loaded and stored here  
 ├── README.md  
 └── .gitignore  
 
