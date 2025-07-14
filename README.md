@@ -58,7 +58,7 @@ Run the scripts in this order:
    ```
 
 ## 📘 Key Findings
-[Read the Thesis](docs/Thesis.pdf)
+[More details in the Thesis](docs/Thesis.pdf)
 <p align="center">
   <img src="docs/Overall-asymmetry-index-distribution.png" alt="Overall Asymmetry Index Distribution" width="100%"/>
 </p>
