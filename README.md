@@ -31,7 +31,7 @@ root/
 **Python 3.7+**  
 - Required Python packages (install via pip):  
   ```bash
-  pip install numpy scipy pandas matplotlib
+  pip install numpy scipy pandas matplotlib pyEDM
   ```
 **CCM**  
 - Download Python juypiter version from [here](https://phdinds-aim.github.io/time_series_handbook/06_ConvergentCrossMappingandSugiharaCausality/ccm_sugihara.html#introduction)
@@ -39,11 +39,6 @@ root/
 **CHB-MIT**
 - Download dataset from [here](https://physionet.org/content/chbmit/1.0.0/#files-panel) and store it in root/data folder 
 
-**pyEDM**
-- Download pyEDM (install via pip):
-  ```bash
-  pip install pyEDM
-  ```
 
 ## 🚀 Usage
 
